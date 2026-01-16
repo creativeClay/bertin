@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: task_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: taskdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: task_backend
+    environment:
+      DB_USER: user
+      DB_PASSWORD: password
+      DB_HOST: db
+      DB_NAME: taskdb
+      JWT_SECRET: secret
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: task_frontend
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  db_data:
