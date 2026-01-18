@@ -42,9 +42,12 @@ export class AuthService {
     }
 
     this.http.get<{ user: User }>(`${this.apiUrl}/me`).pipe(
-      catchError(() => {
-        // Token invalid or user doesn't exist - clear auth
-        this.clearAuth();
+      catchError((error) => {
+        // Only clear auth for 401 (unauthorized) - not for network errors
+        if (error.status === 401) {
+          this.clearAuth();
+        }
+        // For other errors (network, etc.), keep the user logged in
         return of(null);
       })
     ).subscribe(response => {
