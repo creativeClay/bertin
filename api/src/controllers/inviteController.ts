@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import { Invite, Organization, User } from '../models';
 import { AuthRequest } from '../types';
 import { generateToken } from '../middleware/auth';
-import { sendInviteEmail } from '../services/emailService';
+import { sendInviteEmail, sendInviteStatusEmail } from '../services/emailService';
+import { createNotification } from './notificationController';
 import * as XLSX from 'xlsx';
 
 export const createInvite = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -340,6 +341,30 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
         invite.accepted = true;
         await invite.save();
 
+        // Notify the inviter that their invite was accepted
+        await createNotification(
+          invite.invited_by,
+          invite.org_id,
+          'invite_accepted',
+          'Invite Accepted',
+          `${existingUser.first_name} ${existingUser.last_name} (${invite.email}) has accepted your invitation and joined the organization`,
+          null,
+          existingUser.id
+        );
+
+        // Send email to inviter
+        const inviter = await User.findByPk(invite.invited_by);
+        const organization = await Organization.findByPk(invite.org_id);
+        if (inviter?.email) {
+          sendInviteStatusEmail('invite_accepted', {
+            recipientEmail: inviter.email,
+            recipientName: inviter.full_name,
+            inviteeEmail: invite.email,
+            inviteeName: `${existingUser.first_name} ${existingUser.last_name}`,
+            organizationName: organization?.name
+          }).catch(err => console.error('Failed to send invite status email:', err));
+        }
+
         const jwtToken = generateToken({
           id: existingUser.id,
           email: existingUser.email,
@@ -374,6 +399,30 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
     // Mark invite as accepted
     invite.accepted = true;
     await invite.save();
+
+    // Notify the inviter that their invite was accepted
+    await createNotification(
+      invite.invited_by,
+      invite.org_id,
+      'invite_accepted',
+      'Invite Accepted',
+      `${first_name} ${last_name} (${invite.email}) has accepted your invitation and joined the organization`,
+      null,
+      user.id
+    );
+
+    // Send email to inviter
+    const inviter = await User.findByPk(invite.invited_by);
+    const organization = await Organization.findByPk(invite.org_id);
+    if (inviter?.email) {
+      sendInviteStatusEmail('invite_accepted', {
+        recipientEmail: inviter.email,
+        recipientName: inviter.full_name,
+        inviteeEmail: invite.email,
+        inviteeName: `${first_name} ${last_name}`,
+        organizationName: organization?.name
+      }).catch(err => console.error('Failed to send invite status email:', err));
+    }
 
     const jwtToken = generateToken({
       id: user.id,
@@ -474,7 +523,36 @@ export const cancelInvite = async (req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
+    const inviteEmail = invite.email;
+    const originalInviter = invite.invited_by;
+    const currentUserId = req.user!.id;
+
     await invite.destroy();
+
+    // Notify the original inviter if different from the one cancelling
+    if (originalInviter !== currentUserId) {
+      await createNotification(
+        originalInviter,
+        orgId,
+        'invite_cancelled',
+        'Invite Cancelled',
+        `The invite to ${inviteEmail} has been cancelled`,
+        null,
+        currentUserId
+      );
+
+      // Send email to original inviter
+      const inviter = await User.findByPk(originalInviter);
+      const organization = await Organization.findByPk(orgId);
+      if (inviter?.email) {
+        sendInviteStatusEmail('invite_cancelled', {
+          recipientEmail: inviter.email,
+          recipientName: inviter.full_name,
+          inviteeEmail: inviteEmail,
+          organizationName: organization?.name
+        }).catch(err => console.error('Failed to send invite status email:', err));
+      }
+    }
 
     res.json({ message: 'Invite cancelled successfully' });
   } catch (error) {

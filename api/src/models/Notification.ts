@@ -1,7 +1,7 @@
 import { DataTypes, Model, Optional } from 'sequelize';
 import sequelize from '../config/database';
 
-export type NotificationType = 'task_created' | 'task_updated' | 'task_deleted' | 'task_assigned' | 'task_due_soon' | 'invite_received' | 'info';
+export type NotificationType = 'task_created' | 'task_updated' | 'task_deleted' | 'task_assigned' | 'task_due_soon' | 'invite_received' | 'invite_accepted' | 'invite_cancelled' | 'info';
 
 interface NotificationAttributes {
   id: number;
@@ -57,7 +57,7 @@ Notification.init(
       }
     },
     type: {
-      type: DataTypes.ENUM('task_created', 'task_updated', 'task_deleted', 'task_assigned', 'task_due_soon', 'invite_received', 'info'),
+      type: DataTypes.ENUM('task_created', 'task_updated', 'task_deleted', 'task_assigned', 'task_due_soon', 'invite_received', 'invite_accepted', 'invite_cancelled', 'info'),
       allowNull: false
     },
     title: {

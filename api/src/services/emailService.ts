@@ -299,3 +299,156 @@ export const sendTaskNotificationEmail = async (
     // Don't throw - email failure shouldn't break the main operation
   }
 };
+
+// Invite status notification email types
+export type InviteNotificationType = 'invite_accepted' | 'invite_cancelled';
+
+interface InviteStatusEmailOptions {
+  recipientEmail: string;
+  recipientName: string;
+  inviteeEmail: string;
+  inviteeName?: string;
+  organizationName?: string;
+}
+
+export const sendInviteStatusEmail = async (
+  type: InviteNotificationType,
+  options: InviteStatusEmailOptions
+): Promise<void> => {
+  try {
+    const appName = process.env.APP_NAME || 'Task Manager';
+
+    const isAccepted = type === 'invite_accepted';
+    const color = isAccepted
+      ? { bg: '#ecfdf5', border: '#10b981', text: '#065f46' }
+      : { bg: '#fef2f2', border: '#ef4444', text: '#991b1b' };
+
+    const icon = isAccepted
+      ? `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>`
+      : `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+
+    const title = isAccepted ? 'Invitation Accepted!' : 'Invitation Cancelled';
+    const subject = isAccepted
+      ? `${options.inviteeName || options.inviteeEmail} joined ${options.organizationName || 'your organization'}`
+      : `Invitation to ${options.inviteeEmail} was cancelled`;
+
+    const message = isAccepted
+      ? `Great news! <strong>${options.inviteeName || options.inviteeEmail}</strong> has accepted your invitation and joined <strong>${options.organizationName || 'your organization'}</strong>.`
+      : `The invitation you sent to <strong>${options.inviteeEmail}</strong> has been cancelled by another admin.`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${title}</title>
+      </head>
+      <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f3f4f6;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="min-width: 100%; background-color: #f3f4f6;">
+          <tr>
+            <td align="center" style="padding: 40px 20px;">
+              <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+                <!-- Header -->
+                <tr>
+                  <td style="padding: 30px 40px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+                    <h1 style="margin: 0; font-size: 24px; color: #111827;">${appName}</h1>
+                  </td>
+                </tr>
+
+                <!-- Icon & Title -->
+                <tr>
+                  <td style="padding: 40px 40px 20px; text-align: center;">
+                    <div style="display: inline-block; padding: 16px; background-color: ${color.bg}; border-radius: 50%; margin-bottom: 20px;">
+                      ${icon}
+                    </div>
+                    <h2 style="margin: 0; font-size: 22px; color: ${color.text};">${title}</h2>
+                  </td>
+                </tr>
+
+                <!-- Greeting -->
+                <tr>
+                  <td style="padding: 0 40px 20px;">
+                    <p style="margin: 0; font-size: 16px; color: #374151;">Hi <strong>${options.recipientName}</strong>,</p>
+                  </td>
+                </tr>
+
+                <!-- Message -->
+                <tr>
+                  <td style="padding: 0 40px 30px;">
+                    <p style="margin: 0; font-size: 16px; color: #374151; line-height: 1.6;">${message}</p>
+                  </td>
+                </tr>
+
+                <!-- Info Card -->
+                <tr>
+                  <td style="padding: 0 40px 30px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: ${color.bg}; border-left: 4px solid ${color.border}; border-radius: 8px;">
+                      <tr>
+                        <td style="padding: 20px;">
+                          <table role="presentation" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td style="padding: 4px 0;">
+                                <span style="font-size: 13px; color: #6b7280;">
+                                  <span style="margin-right: 6px;">📧</span>Email:
+                                  <strong style="color: #111827;">${options.inviteeEmail}</strong>
+                                </span>
+                              </td>
+                            </tr>
+                            ${options.inviteeName ? `
+                            <tr>
+                              <td style="padding: 4px 0;">
+                                <span style="font-size: 13px; color: #6b7280;">
+                                  <span style="margin-right: 6px;">👤</span>Name:
+                                  <strong style="color: #111827;">${options.inviteeName}</strong>
+                                </span>
+                              </td>
+                            </tr>
+                            ` : ''}
+                            ${options.organizationName ? `
+                            <tr>
+                              <td style="padding: 4px 0;">
+                                <span style="font-size: 13px; color: #6b7280;">
+                                  <span style="margin-right: 6px;">🏢</span>Organization:
+                                  <strong style="color: #111827;">${options.organizationName}</strong>
+                                </span>
+                              </td>
+                            </tr>
+                            ` : ''}
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 12px 12px;">
+                    <p style="margin: 0 0 10px; font-size: 13px; color: #6b7280; text-align: center;">
+                      You're receiving this email because you're an admin of ${options.organizationName || appName}.
+                    </p>
+                    <p style="margin: 0; font-size: 13px; color: #9ca3af; text-align: center;">
+                      &copy; ${new Date().getFullYear()} ${appName}. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    await sendEmail({
+      to: options.recipientEmail,
+      subject,
+      html
+    });
+    console.log(`Invite status email sent: ${type} to ${options.recipientEmail}`);
+  } catch (error) {
+    console.error('Failed to send invite status email:', error);
+    // Don't throw - email failure shouldn't break the main operation
+  }
+};

@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { createTestApp } from './helpers/testApp';
-import { createTestAdmin, createTestUser, createTestInvite, getAuthToken } from './helpers/testData';
+import { createTestAdmin, createTestUser, createTestInvite, getAuthToken, getNotificationsForUser, clearNotifications } from './helpers/testData';
 import { Invite } from '../models';
 
 const app = createTestApp();
@@ -303,6 +303,60 @@ describe('Invite Controller', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('Invite has already been accepted');
+    });
+  });
+
+  describe('Invite Notifications', () => {
+    beforeEach(async () => {
+      await clearNotifications();
+    });
+
+    it('should notify inviter when invite is accepted', async () => {
+      const { admin, org } = await createTestAdmin();
+      const invite = await createTestInvite(org.id, admin.id);
+
+      await request(app)
+        .post(`/api/invites/${invite.token}/accept`)
+        .send({
+          first_name: 'New',
+          last_name: 'Member',
+          password: 'password123'
+        });
+
+      const notifications = await getNotificationsForUser(admin.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'invite_accepted')).toBe(true);
+      expect(notifications.some(n => n.message.includes('accepted your invitation'))).toBe(true);
+    });
+
+    it('should notify original inviter when invite is cancelled by another admin', async () => {
+      const { admin: admin1, org } = await createTestAdmin();
+      // Create second admin in same org
+      const admin2 = await createTestUser({ org_id: org.id, role: 'admin', first_name: 'Admin', last_name: 'Two' });
+      const invite = await createTestInvite(org.id, admin1.id);
+      const admin2Token = getAuthToken(admin2);
+
+      await request(app)
+        .delete(`/api/organization/invites/${invite.id}`)
+        .set('Authorization', `Bearer ${admin2Token}`);
+
+      const notifications = await getNotificationsForUser(admin1.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'invite_cancelled')).toBe(true);
+    });
+
+    it('should not notify when admin cancels their own invite', async () => {
+      const { admin, org } = await createTestAdmin();
+      const invite = await createTestInvite(org.id, admin.id);
+      const token = getAuthToken(admin);
+
+      await request(app)
+        .delete(`/api/organization/invites/${invite.id}`)
+        .set('Authorization', `Bearer ${token}`);
+
+      const notifications = await getNotificationsForUser(admin.id);
+      const cancelNotifications = notifications.filter(n => n.type === 'invite_cancelled');
+      expect(cancelNotifications.length).toBe(0);
     });
   });
 });

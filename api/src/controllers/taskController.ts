@@ -208,59 +208,148 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
 
     // Notify if status changed
     if (status && status !== previousStatus && task.assigned_to) {
-      // Save notification to database (also sends Socket.IO notification)
-      await createNotification(
-        task.assigned_to,
-        org_id,
-        'task_updated',
-        'Task Updated',
-        `Task "${task.title}" status changed to ${status}`,
-        task.id,
-        currentUserId
-      );
+      // Notify assignee (if not the one making the change)
+      if (task.assigned_to !== currentUserId) {
+        await createNotification(
+          task.assigned_to,
+          org_id,
+          'task_updated',
+          'Task Updated',
+          `Task "${task.title}" status changed to ${status}`,
+          task.id,
+          currentUserId
+        );
 
-      // Email notification
-      const assignee = await User.findByPk(task.assigned_to);
-      if (assignee?.email) {
-        sendTaskNotificationEmail('task_updated', {
-          recipientEmail: assignee.email,
-          recipientName: assignee.full_name,
-          taskTitle: task.title,
-          taskDescription: task.description || undefined,
-          taskStatus: task.status,
-          taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-          assignerName: currentUser?.full_name,
-          organizationName: organization?.name
-        });
+        // Email notification to assignee
+        const assignee = await User.findByPk(task.assigned_to);
+        if (assignee?.email) {
+          sendTaskNotificationEmail('task_updated', {
+            recipientEmail: assignee.email,
+            recipientName: assignee.full_name,
+            taskTitle: task.title,
+            taskDescription: task.description || undefined,
+            taskStatus: task.status,
+            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+            assignerName: currentUser?.full_name,
+            organizationName: organization?.name
+          });
+        }
+      }
+
+      // Notify creator (if different from actor and assignee)
+      if (task.created_by !== currentUserId && task.created_by !== task.assigned_to) {
+        await createNotification(
+          task.created_by,
+          org_id,
+          'task_updated',
+          'Task Status Updated',
+          `Task "${task.title}" status changed to ${status}`,
+          task.id,
+          currentUserId
+        );
+
+        // Email notification to creator
+        const creator = await User.findByPk(task.created_by);
+        if (creator?.email) {
+          sendTaskNotificationEmail('task_updated', {
+            recipientEmail: creator.email,
+            recipientName: creator.full_name,
+            taskTitle: task.title,
+            taskDescription: task.description || undefined,
+            taskStatus: task.status,
+            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+            assignerName: currentUser?.full_name,
+            organizationName: organization?.name
+          });
+        }
       }
     }
 
     // Notify if assigned to new user
     if (assigned_to && assigned_to !== previousAssignee) {
-      // Save notification to database (also sends Socket.IO notification)
-      await createNotification(
-        assigned_to,
-        org_id,
-        'task_assigned',
-        'Task Assigned',
-        `You have been assigned to task: ${task.title}`,
-        task.id,
-        currentUserId
-      );
+      // Notify new assignee (if not the one making the change)
+      if (assigned_to !== currentUserId) {
+        await createNotification(
+          assigned_to,
+          org_id,
+          'task_assigned',
+          'Task Assigned',
+          `You have been assigned to task: ${task.title}`,
+          task.id,
+          currentUserId
+        );
 
-      // Email notification
-      const newAssignee = await User.findByPk(assigned_to);
-      if (newAssignee?.email) {
-        sendTaskNotificationEmail('task_assigned', {
-          recipientEmail: newAssignee.email,
-          recipientName: newAssignee.full_name,
-          taskTitle: task.title,
-          taskDescription: task.description || undefined,
-          taskStatus: task.status,
-          taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-          assignerName: currentUser?.full_name,
-          organizationName: organization?.name
-        });
+        // Email notification to new assignee
+        const newAssignee = await User.findByPk(assigned_to);
+        if (newAssignee?.email) {
+          sendTaskNotificationEmail('task_assigned', {
+            recipientEmail: newAssignee.email,
+            recipientName: newAssignee.full_name,
+            taskTitle: task.title,
+            taskDescription: task.description || undefined,
+            taskStatus: task.status,
+            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+            assignerName: currentUser?.full_name,
+            organizationName: organization?.name
+          });
+        }
+      }
+
+      // Notify previous assignee (if exists and not the one making the change)
+      if (previousAssignee && previousAssignee !== currentUserId) {
+        const prevAssignee = await User.findByPk(previousAssignee);
+        await createNotification(
+          previousAssignee,
+          org_id,
+          'task_updated',
+          'Task Reassigned',
+          `Task "${task.title}" has been reassigned to someone else`,
+          task.id,
+          currentUserId
+        );
+
+        // Email notification to previous assignee
+        if (prevAssignee?.email) {
+          sendTaskNotificationEmail('task_updated', {
+            recipientEmail: prevAssignee.email,
+            recipientName: prevAssignee.full_name,
+            taskTitle: task.title,
+            taskDescription: task.description || undefined,
+            taskStatus: task.status,
+            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+            assignerName: currentUser?.full_name,
+            organizationName: organization?.name
+          });
+        }
+      }
+
+      // Notify creator (if different from actor, new assignee, and previous assignee)
+      if (task.created_by !== currentUserId && task.created_by !== assigned_to && task.created_by !== previousAssignee) {
+        const newAssigneeUser = await User.findByPk(assigned_to);
+        await createNotification(
+          task.created_by,
+          org_id,
+          'task_updated',
+          'Task Reassigned',
+          `Task "${task.title}" was reassigned to ${newAssigneeUser?.full_name || 'another user'}`,
+          task.id,
+          currentUserId
+        );
+
+        // Email notification to creator
+        const creator = await User.findByPk(task.created_by);
+        if (creator?.email) {
+          sendTaskNotificationEmail('task_updated', {
+            recipientEmail: creator.email,
+            recipientName: creator.full_name,
+            taskTitle: task.title,
+            taskDescription: task.description || undefined,
+            taskStatus: task.status,
+            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+            assignerName: currentUser?.full_name,
+            organizationName: organization?.name
+          });
+        }
       }
     }
 

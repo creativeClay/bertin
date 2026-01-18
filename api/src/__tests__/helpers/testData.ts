@@ -1,4 +1,4 @@
-import { User, Organization, Task, Invite } from '../../models';
+import { User, Organization, Task, Invite, Notification } from '../../models';
 import { generateToken } from '../../middleware/auth';
 
 export const createTestOrganization = async (userId: number) => {
@@ -91,4 +91,15 @@ export const getAuthToken = (user: User) => {
     org_id: user.org_id,
     role: user.role
   });
+};
+
+export const getNotificationsForUser = async (userId: number) => {
+  return Notification.findAll({
+    where: { user_id: userId },
+    order: [['createdAt', 'DESC']]
+  });
+};
+
+export const clearNotifications = async () => {
+  return Notification.destroy({ where: {} });
 };

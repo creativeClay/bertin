@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { createTestApp } from './helpers/testApp';
-import { createTestAdmin, createTestUser, createTestTask, getAuthToken } from './helpers/testData';
+import { createTestAdmin, createTestUser, createTestTask, getAuthToken, getNotificationsForUser, clearNotifications } from './helpers/testData';
 
 const app = createTestApp();
 
@@ -278,6 +278,129 @@ describe('Task Controller', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.users).toHaveLength(3); // admin + 2 members
+    });
+  });
+
+  describe('Task Notifications', () => {
+    beforeEach(async () => {
+      await clearNotifications();
+    });
+
+    it('should notify assignee when task status is changed by another user', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const task = await createTestTask(org.id, admin.id, {
+        title: 'Test Task',
+        assigned_to: member.id,
+        status: 'Pending'
+      });
+      const token = getAuthToken(admin);
+
+      await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ status: 'In Progress' });
+
+      const notifications = await getNotificationsForUser(member.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'task_updated')).toBe(true);
+    });
+
+    it('should notify creator when task status is changed by assignee', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const task = await createTestTask(org.id, admin.id, {
+        title: 'Test Task',
+        assigned_to: member.id,
+        status: 'Pending'
+      });
+      const memberToken = getAuthToken(member);
+
+      await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ status: 'Completed' });
+
+      const notifications = await getNotificationsForUser(admin.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'task_updated')).toBe(true);
+    });
+
+    it('should notify previous assignee when task is reassigned', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member1 = await createTestUser({ org_id: org.id, role: 'member', first_name: 'Member', last_name: 'One' });
+      const member2 = await createTestUser({ org_id: org.id, role: 'member', first_name: 'Member', last_name: 'Two' });
+      const task = await createTestTask(org.id, admin.id, {
+        title: 'Test Task',
+        assigned_to: member1.id
+      });
+      const token = getAuthToken(admin);
+
+      await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ assigned_to: member2.id });
+
+      const notifications = await getNotificationsForUser(member1.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'task_updated' && n.message.includes('reassigned'))).toBe(true);
+    });
+
+    it('should notify new assignee when task is assigned', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const task = await createTestTask(org.id, admin.id, { title: 'Test Task' });
+      const token = getAuthToken(admin);
+
+      await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ assigned_to: member.id });
+
+      const notifications = await getNotificationsForUser(member.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'task_assigned')).toBe(true);
+    });
+
+    it('should notify assignee when task is created with assignment', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const token = getAuthToken(admin);
+
+      await request(app)
+        .post('/api/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'New Task',
+          assigned_to: member.id
+        });
+
+      const notifications = await getNotificationsForUser(member.id);
+      expect(notifications.length).toBeGreaterThanOrEqual(1);
+      expect(notifications.some(n => n.type === 'task_created')).toBe(true);
+    });
+
+    it('should not notify user when they make the change themselves', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const task = await createTestTask(org.id, member.id, {
+        title: 'Test Task',
+        assigned_to: member.id,
+        status: 'Pending'
+      });
+      const memberToken = getAuthToken(member);
+
+      await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ status: 'Completed' });
+
+      // Member should not get notification for their own change
+      const notifications = await getNotificationsForUser(member.id);
+      const statusNotifications = notifications.filter(n =>
+        n.type === 'task_updated' && n.message.includes('status changed')
+      );
+      expect(statusNotifications.length).toBe(0);
     });
   });
 });
