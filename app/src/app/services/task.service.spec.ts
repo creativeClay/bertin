@@ -124,12 +124,12 @@ describe('TaskService', () => {
   });
 
   describe('createTask', () => {
-    it('should create a new task and add to list', () => {
+    it('should create a new task (Socket.IO handles list update)', () => {
       const newTask = { title: 'New Task' };
 
       service.createTask(newTask).subscribe(response => {
         expect(response.task).toEqual(mockTask);
-        expect(service.tasks()).toContainEqual(mockTask);
+        // Note: List is updated via Socket.IO, not locally
       });
 
       const req = httpMock.expectOne(`${environment.apiUrl}/tasks`);
@@ -140,15 +140,12 @@ describe('TaskService', () => {
   });
 
   describe('updateTask', () => {
-    it('should update task and update list', () => {
-      // First add a task
-      service.createTask({ title: 'Test' }).subscribe();
-      httpMock.expectOne(`${environment.apiUrl}/tasks`).flush({ task: mockTask });
-
+    it('should update task (Socket.IO handles list update)', () => {
       const updatedTask = { ...mockTask, title: 'Updated Task' };
 
       service.updateTask(1, { title: 'Updated Task' }).subscribe(response => {
         expect(response.task.title).toBe('Updated Task');
+        // Note: List is updated via Socket.IO, not locally
       });
 
       const req = httpMock.expectOne(`${environment.apiUrl}/tasks/1`);
@@ -158,15 +155,10 @@ describe('TaskService', () => {
   });
 
   describe('deleteTask', () => {
-    it('should delete task and remove from list', () => {
-      // First add a task
-      service.createTask({ title: 'Test' }).subscribe();
-      httpMock.expectOne(`${environment.apiUrl}/tasks`).flush({ task: mockTask });
-      expect(service.tasks()).toContainEqual(mockTask);
-
+    it('should delete task (Socket.IO handles list update)', () => {
       service.deleteTask(1).subscribe(response => {
         expect(response.message).toBe('Task deleted');
-        expect(service.tasks()).not.toContainEqual(mockTask);
+        // Note: List is updated via Socket.IO, not locally
       });
 
       const req = httpMock.expectOne(`${environment.apiUrl}/tasks/1`);
@@ -177,9 +169,8 @@ describe('TaskService', () => {
 
   describe('updateTaskInList', () => {
     it('should update existing task in list', () => {
-      // First add a task
-      service.createTask({ title: 'Test' }).subscribe();
-      httpMock.expectOne(`${environment.apiUrl}/tasks`).flush({ task: mockTask });
+      // First add a task via updateTaskInList (simulating Socket.IO)
+      service.updateTaskInList(mockTask);
 
       const updatedTask = { ...mockTask, title: 'Updated' };
       service.updateTaskInList(updatedTask);
@@ -197,9 +188,8 @@ describe('TaskService', () => {
 
   describe('removeTaskFromList', () => {
     it('should remove task from list by id', () => {
-      // First add a task
-      service.createTask({ title: 'Test' }).subscribe();
-      httpMock.expectOne(`${environment.apiUrl}/tasks`).flush({ task: mockTask });
+      // First add a task via updateTaskInList (simulating Socket.IO)
+      service.updateTaskInList(mockTask);
       expect(service.tasks()).toHaveLength(1);
 
       service.removeTaskFromList(1);

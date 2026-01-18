@@ -53,8 +53,14 @@ describe('NavbarComponent', () => {
   });
 
   it('should call logout on logout button click', () => {
-    const logoutButton = fixture.nativeElement.querySelector('button');
-    logoutButton?.click();
+    // First open the dropdown by clicking the profile button
+    component.showDropdown = true;
+    fixture.detectChanges();
+
+    // Find and click the logout button (it contains 'Logout' text)
+    const buttons = fixture.nativeElement.querySelectorAll('button');
+    const logoutButton = Array.from(buttons).find((btn: any) => btn.textContent?.includes('Logout'));
+    (logoutButton as HTMLButtonElement)?.click();
     expect(authServiceMock.logout).toHaveBeenCalled();
   });
 
