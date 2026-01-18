@@ -62,9 +62,19 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
             </select>
           </div>
 
-          <button (click)="openModal()" class="btn btn-primary">
-            + New Task
-          </button>
+          <div class="flex gap-2">
+            @if (taskService.tasks().length > 0) {
+              <button (click)="exportToCSV()" class="btn bg-green-600 text-white hover:bg-green-700">
+                <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                Export CSV
+              </button>
+            }
+            <button (click)="openModal()" class="btn btn-primary">
+              + New Task
+            </button>
+          </div>
         </div>
       </div>
 
@@ -114,25 +124,52 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                         <span class="text-xs">(Overdue)</span>
                       }
                     </td>
-                    <td class="px-6 py-4 text-right space-x-2">
-                      <button
-                        (click)="viewTaskDetails(task)"
-                        class="text-gray-600 hover:text-gray-800"
-                      >
-                        View
-                      </button>
-                      <button
-                        (click)="openModal(task)"
-                        class="text-blue-600 hover:text-blue-800"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        (click)="deleteTask(task)"
-                        class="text-red-600 hover:text-red-800"
-                      >
-                        Delete
-                      </button>
+                    <td class="px-6 py-4 text-right">
+                      <!-- Action Dropdown -->
+                      <div class="relative inline-block text-left">
+                        <button
+                          (click)="toggleTaskMenu(task.id)"
+                          class="p-2 rounded-full hover:bg-gray-100"
+                        >
+                          <svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                          </svg>
+                        </button>
+
+                        @if (openTaskMenuId === task.id) {
+                          <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                            <button
+                              (click)="viewTaskDetails(task); closeTaskMenu()"
+                              class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                              </svg>
+                              View Details
+                            </button>
+                            <button
+                              (click)="openModal(task); closeTaskMenu()"
+                              class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                            >
+                              <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                              </svg>
+                              Edit
+                            </button>
+                            <div class="border-t border-gray-100 my-1"></div>
+                            <button
+                              (click)="deleteTask(task); closeTaskMenu()"
+                              class="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
+                            >
+                              <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                              </svg>
+                              Delete
+                            </button>
+                          </div>
+                        }
+                      </div>
                     </td>
                   </tr>
                 }
@@ -142,6 +179,11 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
         }
       </div>
     </div>
+
+    <!-- Backdrop for closing dropdown -->
+    @if (openTaskMenuId !== null) {
+      <div (click)="closeTaskMenu()" class="fixed inset-0 z-40"></div>
+    }
 
     <!-- Task Details Modal -->
     @if (showDetailsModal && viewTask) {
@@ -163,7 +205,6 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
             </div>
 
             <div class="space-y-4">
-              <!-- Description -->
               <div>
                 <h3 class="text-sm font-medium text-gray-500 uppercase">Description</h3>
                 <p class="mt-1 text-gray-900">{{ viewTask.description || 'No description provided' }}</p>
@@ -171,9 +212,7 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
 
               <hr class="border-gray-200" />
 
-              <!-- Details Grid -->
               <div class="grid grid-cols-2 gap-4">
-                <!-- Due Date -->
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Due Date</h3>
                   <p class="mt-1 text-gray-900" [class.text-red-600]="isOverdue(viewTask)">
@@ -184,13 +223,11 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                   </p>
                 </div>
 
-                <!-- Created Date -->
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Created</h3>
                   <p class="mt-1 text-gray-900">{{ viewTask.createdAt | date:'medium' }}</p>
                 </div>
 
-                <!-- Assigned To -->
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Assigned To</h3>
                   <div class="mt-1">
@@ -203,7 +240,6 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                   </div>
                 </div>
 
-                <!-- Created By -->
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Created By</h3>
                   <div class="mt-1">
@@ -216,13 +252,11 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                   </div>
                 </div>
 
-                <!-- Last Updated -->
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Last Updated</h3>
                   <p class="mt-1 text-gray-900">{{ viewTask.updatedAt | date:'medium' }}</p>
                 </div>
 
-                <!-- Task ID -->
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Task ID</h3>
                   <p class="mt-1 text-gray-900">#{{ viewTask.id }}</p>
@@ -230,7 +264,6 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
               </div>
             </div>
 
-            <!-- Actions -->
             <div class="mt-6 flex justify-end space-x-3">
               <button
                 (click)="closeDetailsModal()"
@@ -268,6 +301,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   viewTask: Task | null = null;
   statusFilter = '';
   userFilter = '';
+  openTaskMenuId: number | null = null;
 
   private subscriptions: Subscription[] = [];
 
@@ -299,6 +333,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const status = this.statusFilter as TaskStatus | undefined;
     const userId = this.userFilter ? parseInt(this.userFilter) : undefined;
     this.taskService.loadTasks(status || undefined, userId).subscribe();
+  }
+
+  toggleTaskMenu(taskId: number): void {
+    this.openTaskMenuId = this.openTaskMenuId === taskId ? null : taskId;
+  }
+
+  closeTaskMenu(): void {
+    this.openTaskMenuId = null;
   }
 
   openModal(task?: Task): void {
@@ -359,6 +401,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
       });
     }
+  }
+
+  exportToCSV(): void {
+    const tasks = this.taskService.tasks();
+    if (tasks.length === 0) return;
+
+    const headers = ['ID', 'Title', 'Description', 'Status', 'Assigned To', 'Due Date', 'Created By', 'Created At', 'Updated At'];
+    const rows = tasks.map(task => [
+      task.id,
+      `"${task.title.replace(/"/g, '""')}"`,
+      `"${(task.description || '').replace(/"/g, '""')}"`,
+      task.status,
+      task.assignee?.username || 'Unassigned',
+      task.due_date ? new Date(task.due_date).toLocaleDateString() : '',
+      task.creator?.username || '',
+      new Date(task.createdAt).toLocaleString(),
+      new Date(task.updatedAt).toLocaleString()
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `tasks_export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.notificationService.success('Tasks exported successfully');
   }
 
   getStatusBadgeClass(status: TaskStatus): string {
