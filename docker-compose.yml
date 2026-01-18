@@ -12,28 +12,36 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d taskdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  backend:
-    build: ./backend
-    container_name: task_backend
+  api:
+    build: ./api
+    container_name: task_api
     environment:
       DB_USER: user
       DB_PASSWORD: password
       DB_HOST: db
       DB_NAME: taskdb
-      JWT_SECRET: secret
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key}
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:4200
     ports:
       - "3000:3000"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
-  frontend:
-    build: ./frontend
-    container_name: task_frontend
+  app:
+    build: ./app
+    container_name: task_app
     ports:
       - "4200:80"
     depends_on:
-      - backend
+      - api
 
 volumes:
   db_data:
