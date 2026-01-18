@@ -116,6 +116,12 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                     </td>
                     <td class="px-6 py-4 text-right space-x-2">
                       <button
+                        (click)="viewTaskDetails(task)"
+                        class="text-gray-600 hover:text-gray-800"
+                      >
+                        View
+                      </button>
+                      <button
                         (click)="openModal(task)"
                         class="text-blue-600 hover:text-blue-800"
                       >
@@ -137,6 +143,113 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
       </div>
     </div>
 
+    <!-- Task Details Modal -->
+    @if (showDetailsModal && viewTask) {
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div class="p-6">
+            <div class="flex justify-between items-start mb-6">
+              <div>
+                <h2 class="text-2xl font-bold text-gray-900">{{ viewTask.title }}</h2>
+                <span [class]="getStatusBadgeClass(viewTask.status)" class="mt-2 inline-block">
+                  {{ viewTask.status }}
+                </span>
+              </div>
+              <button (click)="closeDetailsModal()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Description -->
+              <div>
+                <h3 class="text-sm font-medium text-gray-500 uppercase">Description</h3>
+                <p class="mt-1 text-gray-900">{{ viewTask.description || 'No description provided' }}</p>
+              </div>
+
+              <hr class="border-gray-200" />
+
+              <!-- Details Grid -->
+              <div class="grid grid-cols-2 gap-4">
+                <!-- Due Date -->
+                <div>
+                  <h3 class="text-sm font-medium text-gray-500 uppercase">Due Date</h3>
+                  <p class="mt-1 text-gray-900" [class.text-red-600]="isOverdue(viewTask)">
+                    {{ viewTask.due_date ? (viewTask.due_date | date:'fullDate') : 'No due date' }}
+                    @if (isOverdue(viewTask)) {
+                      <span class="text-xs ml-1">(Overdue)</span>
+                    }
+                  </p>
+                </div>
+
+                <!-- Created Date -->
+                <div>
+                  <h3 class="text-sm font-medium text-gray-500 uppercase">Created</h3>
+                  <p class="mt-1 text-gray-900">{{ viewTask.createdAt | date:'medium' }}</p>
+                </div>
+
+                <!-- Assigned To -->
+                <div>
+                  <h3 class="text-sm font-medium text-gray-500 uppercase">Assigned To</h3>
+                  <div class="mt-1">
+                    @if (viewTask.assignee) {
+                      <p class="text-gray-900 font-medium">{{ viewTask.assignee.username }}</p>
+                      <p class="text-sm text-gray-500">{{ viewTask.assignee.email }}</p>
+                    } @else {
+                      <p class="text-gray-500">Unassigned</p>
+                    }
+                  </div>
+                </div>
+
+                <!-- Created By -->
+                <div>
+                  <h3 class="text-sm font-medium text-gray-500 uppercase">Created By</h3>
+                  <div class="mt-1">
+                    @if (viewTask.creator) {
+                      <p class="text-gray-900 font-medium">{{ viewTask.creator.username }}</p>
+                      <p class="text-sm text-gray-500">{{ viewTask.creator.email }}</p>
+                    } @else {
+                      <p class="text-gray-500">Unknown</p>
+                    }
+                  </div>
+                </div>
+
+                <!-- Last Updated -->
+                <div>
+                  <h3 class="text-sm font-medium text-gray-500 uppercase">Last Updated</h3>
+                  <p class="mt-1 text-gray-900">{{ viewTask.updatedAt | date:'medium' }}</p>
+                </div>
+
+                <!-- Task ID -->
+                <div>
+                  <h3 class="text-sm font-medium text-gray-500 uppercase">Task ID</h3>
+                  <p class="mt-1 text-gray-900">#{{ viewTask.id }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="mt-6 flex justify-end space-x-3">
+              <button
+                (click)="closeDetailsModal()"
+                class="btn bg-gray-200 text-gray-800 hover:bg-gray-300"
+              >
+                Close
+              </button>
+              <button
+                (click)="closeDetailsModal(); openModal(viewTask)"
+                class="btn btn-primary"
+              >
+                Edit Task
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
     <!-- Task Modal -->
     @if (showModal) {
       <app-task-modal
@@ -150,7 +263,9 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   showModal = false;
+  showDetailsModal = false;
   selectedTask: Task | null = null;
+  viewTask: Task | null = null;
   statusFilter = '';
   userFilter = '';
 
@@ -194,6 +309,16 @@ export class DashboardComponent implements OnInit, OnDestroy {
   closeModal(): void {
     this.showModal = false;
     this.selectedTask = null;
+  }
+
+  viewTaskDetails(task: Task): void {
+    this.viewTask = task;
+    this.showDetailsModal = true;
+  }
+
+  closeDetailsModal(): void {
+    this.showDetailsModal = false;
+    this.viewTask = null;
   }
 
   saveTask(data: any): void {
