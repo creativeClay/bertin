@@ -3,6 +3,7 @@ import { Invite, Organization, User } from '../models';
 import { AuthRequest } from '../types';
 import { generateToken } from '../middleware/auth';
 import { sendInviteEmail } from '../services/emailService';
+import * as XLSX from 'xlsx';
 
 export const createInvite = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -90,6 +91,143 @@ export const createInvite = async (req: AuthRequest, res: Response): Promise<voi
     });
   } catch (error) {
     console.error('Create invite error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const bulkCreateInvites = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orgId = req.user!.org_id;
+    const invitedBy = req.user!.id;
+
+    if (!orgId) {
+      res.status(400).json({ error: 'You must belong to an organization to invite members' });
+      return;
+    }
+
+    if (req.user!.role !== 'admin') {
+      res.status(403).json({ error: 'Only admins can invite members' });
+      return;
+    }
+
+    // Check if file was uploaded
+    if (!req.file) {
+      res.status(400).json({ error: 'No file uploaded. Please upload a CSV or Excel file.' });
+      return;
+    }
+
+    // Parse the file
+    let emails: string[] = [];
+    const fileBuffer = req.file.buffer;
+    const fileName = req.file.originalname.toLowerCase();
+
+    if (fileName.endsWith('.csv')) {
+      // Parse CSV
+      const content = fileBuffer.toString('utf-8');
+      const lines = content.split(/\r?\n/).filter(line => line.trim());
+      emails = lines.map(line => {
+        // Handle CSV with columns - take first column or find email column
+        const cells = line.split(',').map(cell => cell.trim().replace(/^["']|["']$/g, ''));
+        // Look for email in each cell
+        const emailCell = cells.find(cell => cell.includes('@'));
+        return emailCell || cells[0];
+      }).filter(email => email && email.includes('@'));
+    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+      // Parse Excel
+      const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const data = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 });
+
+      const flatData = (data as any[][]).flat();
+      emails = flatData.filter((cell): cell is string =>
+        typeof cell === 'string' && cell.includes('@')
+      );
+    } else {
+      res.status(400).json({ error: 'Invalid file format. Please upload a CSV or Excel file.' });
+      return;
+    }
+
+    if (emails.length === 0) {
+      res.status(400).json({ error: 'No valid email addresses found in the file' });
+      return;
+    }
+
+    // Validate and deduplicate emails
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const validEmails = [...new Set(emails.filter(email => emailRegex.test(email)))];
+
+    if (validEmails.length === 0) {
+      res.status(400).json({ error: 'No valid email addresses found in the file' });
+      return;
+    }
+
+    const organization = await Organization.findByPk(orgId);
+    const inviter = await User.findByPk(invitedBy);
+
+    const results = {
+      success: [] as string[],
+      failed: [] as { email: string; reason: string }[]
+    };
+
+    for (const email of validEmails) {
+      try {
+        // Check if user already exists in org
+        const existingUser = await User.findOne({
+          where: { email, org_id: orgId }
+        });
+
+        if (existingUser) {
+          results.failed.push({ email, reason: 'Already a member' });
+          continue;
+        }
+
+        // Check for existing pending invite
+        const existingInvite = await Invite.findOne({
+          where: { email, org_id: orgId, accepted: false }
+        });
+
+        if (existingInvite && !existingInvite.isExpired()) {
+          results.failed.push({ email, reason: 'Pending invite exists' });
+          continue;
+        }
+
+        // Delete expired invite if exists
+        if (existingInvite) {
+          await existingInvite.destroy();
+        }
+
+        // Create invite
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+
+        const invite = await Invite.create({
+          email,
+          org_id: orgId,
+          invited_by: invitedBy,
+          expires_at: expiresAt
+        });
+
+        // Send invite email (don't wait, fire and forget)
+        sendInviteEmail(
+          email,
+          invite.token,
+          organization?.name || 'Organization',
+          inviter?.full_name || 'Admin'
+        ).catch(err => console.error(`Failed to send invite email to ${email}:`, err));
+
+        results.success.push(email);
+      } catch (error) {
+        results.failed.push({ email, reason: 'Internal error' });
+      }
+    }
+
+    res.status(201).json({
+      message: `Bulk invite completed: ${results.success.length} sent, ${results.failed.length} failed`,
+      results
+    });
+  } catch (error) {
+    console.error('Bulk create invites error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

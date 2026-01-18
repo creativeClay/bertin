@@ -89,6 +89,23 @@ export class OrganizationService {
     return this.http.post<{ message: string }>(`${this.apiUrl}/invites/${inviteId}/resend`, {});
   }
 
+  bulkInvite(file: File): Observable<{
+    message: string;
+    results: { success: string[]; failed: { email: string; reason: string }[] }
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<{
+      message: string;
+      results: { success: string[]; failed: { email: string; reason: string }[] }
+    }>(`${this.apiUrl}/invites/bulk`, formData).pipe(
+      tap(() => {
+        // Reload invites after bulk operation
+        this.loadInvites().subscribe();
+      })
+    );
+  }
+
   // Public endpoints (no auth required)
   getInviteByToken(token: string): Observable<{ invite: Invite }> {
     return this.http.get<{ invite: Invite }>(`${this.inviteApiUrl}/${token}`);

@@ -63,6 +63,19 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
           </div>
 
           <div class="flex gap-2">
+            <label class="btn bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
+              <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+              </svg>
+              {{ bulkTaskProcessing ? 'Importing...' : 'Import CSV' }}
+              <input
+                type="file"
+                class="hidden"
+                accept=".csv,.xlsx,.xls"
+                (change)="onBulkTaskFileSelected($event)"
+                [disabled]="bulkTaskProcessing"
+              />
+            </label>
             @if (taskService.tasks().length > 0) {
               <button (click)="exportToCSV()" class="btn bg-green-600 text-white hover:bg-green-700">
                 <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -176,6 +189,48 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
               </tbody>
             </table>
           </div>
+
+          <!-- Pagination -->
+          @if (taskService.pagination().totalPages > 1) {
+            <div class="px-6 py-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+              <div class="text-sm text-gray-700">
+                Showing {{ ((taskService.pagination().page - 1) * taskService.pagination().limit) + 1 }}
+                to {{ Math.min(taskService.pagination().page * taskService.pagination().limit, taskService.pagination().total) }}
+                of {{ taskService.pagination().total }} tasks
+              </div>
+              <div class="flex items-center space-x-2">
+                <button
+                  (click)="goToPage(taskService.pagination().page - 1)"
+                  [disabled]="!taskService.pagination().hasPrev"
+                  class="px-3 py-1 rounded border text-sm font-medium transition-colors"
+                  [class.bg-white]="taskService.pagination().hasPrev"
+                  [class.text-gray-700]="taskService.pagination().hasPrev"
+                  [class.hover:bg-gray-100]="taskService.pagination().hasPrev"
+                  [class.bg-gray-100]="!taskService.pagination().hasPrev"
+                  [class.text-gray-400]="!taskService.pagination().hasPrev"
+                  [class.cursor-not-allowed]="!taskService.pagination().hasPrev"
+                >
+                  Previous
+                </button>
+                <span class="px-3 py-1 text-sm text-gray-600">
+                  Page {{ taskService.pagination().page }} of {{ taskService.pagination().totalPages }}
+                </span>
+                <button
+                  (click)="goToPage(taskService.pagination().page + 1)"
+                  [disabled]="!taskService.pagination().hasNext"
+                  class="px-3 py-1 rounded border text-sm font-medium transition-colors"
+                  [class.bg-white]="taskService.pagination().hasNext"
+                  [class.text-gray-700]="taskService.pagination().hasNext"
+                  [class.hover:bg-gray-100]="taskService.pagination().hasNext"
+                  [class.bg-gray-100]="!taskService.pagination().hasNext"
+                  [class.text-gray-400]="!taskService.pagination().hasNext"
+                  [class.cursor-not-allowed]="!taskService.pagination().hasNext"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          }
         }
       </div>
     </div>
@@ -295,6 +350,7 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
   `
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  Math = Math; // For template access
   showModal = false;
   showDetailsModal = false;
   selectedTask: Task | null = null;
@@ -302,6 +358,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   statusFilter = '';
   userFilter = '';
   openTaskMenuId: number | null = null;
+  currentPage = 1;
+  pageSize = 10;
+  bulkTaskProcessing = false;
 
   private subscriptions: Subscription[] = [];
 
@@ -324,15 +383,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   loadData(): void {
-    this.taskService.loadTasks().subscribe();
+    this.taskService.loadTasks(undefined, undefined, this.currentPage, this.pageSize).subscribe();
     this.taskService.loadStats().subscribe();
     this.taskService.loadUsers().subscribe();
   }
 
   applyFilters(): void {
+    this.currentPage = 1; // Reset to first page on filter change
     const status = this.statusFilter as TaskStatus | undefined;
     const userId = this.userFilter ? parseInt(this.userFilter) : undefined;
-    this.taskService.loadTasks(status || undefined, userId).subscribe();
+    this.taskService.loadTasks(status || undefined, userId, this.currentPage, this.pageSize).subscribe();
+  }
+
+  goToPage(page: number): void {
+    this.currentPage = page;
+    const status = this.statusFilter as TaskStatus | undefined;
+    const userId = this.userFilter ? parseInt(this.userFilter) : undefined;
+    this.taskService.loadTasks(status || undefined, userId, this.currentPage, this.pageSize).subscribe();
   }
 
   toggleTaskMenu(taskId: number): void {
@@ -433,6 +500,39 @@ export class DashboardComponent implements OnInit, OnDestroy {
     URL.revokeObjectURL(url);
 
     this.notificationService.success('Tasks exported successfully');
+  }
+
+  onBulkTaskFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    this.bulkTaskProcessing = true;
+
+    this.taskService.bulkCreateTasks(file).subscribe({
+      next: (response) => {
+        const successCount = response.results.success.length;
+        const failedCount = response.results.failed.length;
+
+        if (successCount > 0 && failedCount === 0) {
+          this.notificationService.success(`Successfully created ${successCount} tasks`);
+        } else if (successCount > 0 && failedCount > 0) {
+          this.notificationService.success(`Created ${successCount} tasks. ${failedCount} failed.`);
+        } else if (failedCount > 0) {
+          this.notificationService.error(`Failed to create tasks: ${response.results.failed.map(f => f.reason).join(', ')}`);
+        }
+
+        // Reload tasks and stats
+        this.loadData();
+        this.bulkTaskProcessing = false;
+        input.value = ''; // Reset file input
+      },
+      error: (err) => {
+        this.notificationService.error(err.error?.error || 'Failed to import tasks');
+        this.bulkTaskProcessing = false;
+        input.value = ''; // Reset file input
+      }
+    });
   }
 
   getStatusBadgeClass(status: TaskStatus): string {

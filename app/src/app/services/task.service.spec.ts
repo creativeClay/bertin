@@ -42,31 +42,42 @@ describe('TaskService', () => {
   });
 
   describe('loadTasks', () => {
-    it('should load all tasks', () => {
+    const mockPagination = {
+      page: 1,
+      limit: 10,
+      total: 1,
+      totalPages: 1,
+      hasNext: false,
+      hasPrev: false
+    };
+
+    it('should load all tasks with pagination', () => {
       service.loadTasks().subscribe(response => {
         expect(response.tasks).toEqual([mockTask]);
+        expect(response.pagination).toEqual(mockPagination);
         expect(service.tasks()).toEqual([mockTask]);
+        expect(service.pagination()).toEqual(mockPagination);
       });
 
-      const req = httpMock.expectOne(`${environment.apiUrl}/tasks`);
+      const req = httpMock.expectOne(`${environment.apiUrl}/tasks?page=1&limit=10`);
       expect(req.request.method).toBe('GET');
-      req.flush({ tasks: [mockTask] });
+      req.flush({ tasks: [mockTask], pagination: mockPagination });
     });
 
     it('should filter tasks by status', () => {
       service.loadTasks('Pending').subscribe();
 
-      const req = httpMock.expectOne(`${environment.apiUrl}/tasks?status=Pending`);
+      const req = httpMock.expectOne(`${environment.apiUrl}/tasks?status=Pending&page=1&limit=10`);
       expect(req.request.method).toBe('GET');
-      req.flush({ tasks: [mockTask] });
+      req.flush({ tasks: [mockTask], pagination: mockPagination });
     });
 
     it('should filter tasks by assigned user', () => {
       service.loadTasks(undefined, 1).subscribe();
 
-      const req = httpMock.expectOne(`${environment.apiUrl}/tasks?assigned_to=1`);
+      const req = httpMock.expectOne(`${environment.apiUrl}/tasks?assigned_to=1&page=1&limit=10`);
       expect(req.request.method).toBe('GET');
-      req.flush({ tasks: [mockTask] });
+      req.flush({ tasks: [mockTask], pagination: mockPagination });
     });
 
     it('should set loading state', () => {
@@ -75,8 +86,8 @@ describe('TaskService', () => {
       service.loadTasks().subscribe();
       expect(service.loading()).toBe(true);
 
-      const req = httpMock.expectOne(`${environment.apiUrl}/tasks`);
-      req.flush({ tasks: [] });
+      const req = httpMock.expectOne(`${environment.apiUrl}/tasks?page=1&limit=10`);
+      req.flush({ tasks: [], pagination: { ...mockPagination, total: 0, totalPages: 0 } });
       expect(service.loading()).toBe(false);
     });
   });
@@ -97,7 +108,7 @@ describe('TaskService', () => {
   describe('loadUsers', () => {
     it('should load users', () => {
       const mockUsers = [
-        { id: 1, username: 'user1', email: 'user1@test.com', role: 'admin' as const }
+        { id: 1, first_name: 'Test', last_name: 'User', email: 'user1@test.com', role: 'admin' as const, org_id: 1, invited_by: null }
       ];
 
       service.loadUsers().subscribe(response => {

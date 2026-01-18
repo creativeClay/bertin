@@ -172,7 +172,7 @@ type TabType = 'members' | 'invites';
         <!-- Invite Member Section -->
         <div class="card mb-6">
           <h2 class="text-lg font-semibold mb-4">Invite New Member</h2>
-          <div class="flex gap-4">
+          <div class="flex gap-4 mb-4">
             <input
               type="email"
               [(ngModel)]="inviteEmail"
@@ -186,6 +186,60 @@ type TabType = 'members' | 'invites';
             >
               {{ sendingInvite ? 'Sending...' : 'Send Invite' }}
             </button>
+          </div>
+
+          <!-- Bulk Import Section -->
+          <div class="border-t border-gray-200 pt-4 mt-4">
+            <h3 class="text-sm font-medium text-gray-700 mb-2">Or invite multiple users at once</h3>
+            <div class="flex items-center gap-4">
+              <label class="flex-1">
+                <div class="flex items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                     [class.border-blue-500]="bulkInviteFile"
+                     [class.bg-blue-50]="bulkInviteFile">
+                  <div class="text-center">
+                    @if (bulkInviteFile) {
+                      <svg class="w-8 h-8 mx-auto text-blue-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <p class="text-sm text-blue-600 font-medium">{{ bulkInviteFile.name }}</p>
+                    } @else {
+                      <svg class="w-8 h-8 mx-auto text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                      </svg>
+                      <p class="text-sm text-gray-500">Upload CSV or Excel file with emails</p>
+                    }
+                  </div>
+                  <input
+                    type="file"
+                    class="hidden"
+                    accept=".csv,.xlsx,.xls"
+                    (change)="onBulkInviteFileSelected($event)"
+                  />
+                </div>
+              </label>
+              <button
+                (click)="sendBulkInvites()"
+                [disabled]="!bulkInviteFile || bulkInviteProcessing"
+                class="btn btn-primary h-24 px-6"
+              >
+                @if (bulkInviteProcessing) {
+                  <span class="flex items-center">
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Processing...
+                  </span>
+                } @else {
+                  <span class="flex items-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    Import
+                  </span>
+                }
+              </button>
+            </div>
           </div>
         </div>
 
@@ -270,6 +324,8 @@ export class TeamComponent implements OnInit {
   sendingInvite = false;
   openMemberMenuId: number | null = null;
   openInviteMenuId: number | null = null;
+  bulkInviteFile: File | null = null;
+  bulkInviteProcessing = false;
 
   constructor(
     public organizationService: OrganizationService,
@@ -385,5 +441,39 @@ export class TeamComponent implements OnInit {
 
   closeInviteMenu(): void {
     this.openInviteMenuId = null;
+  }
+
+  onBulkInviteFileSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.bulkInviteFile = input.files[0];
+    }
+  }
+
+  sendBulkInvites(): void {
+    if (!this.bulkInviteFile) return;
+
+    this.bulkInviteProcessing = true;
+    this.organizationService.bulkInvite(this.bulkInviteFile).subscribe({
+      next: (response) => {
+        const successCount = response.results.success.length;
+        const failedCount = response.results.failed.length;
+
+        if (successCount > 0 && failedCount === 0) {
+          this.notificationService.success(`Successfully sent ${successCount} invites`);
+        } else if (successCount > 0 && failedCount > 0) {
+          this.notificationService.success(`Sent ${successCount} invites. ${failedCount} failed.`);
+        } else {
+          this.notificationService.error(`Failed to send invites: ${response.results.failed.map(f => f.reason).join(', ')}`);
+        }
+
+        this.bulkInviteFile = null;
+        this.bulkInviteProcessing = false;
+      },
+      error: (err) => {
+        this.notificationService.error(err.error?.error || 'Failed to process bulk invites');
+        this.bulkInviteProcessing = false;
+      }
+    });
   }
 }

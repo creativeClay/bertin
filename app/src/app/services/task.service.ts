@@ -4,6 +4,20 @@ import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { Task, TaskStats, CreateTaskRequest, UpdateTaskRequest, TaskStatus, User } from '../models';
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
+export interface TasksResponse {
+  tasks: Task[];
+  pagination: Pagination;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -14,23 +28,28 @@ export class TaskService {
   private statsSignal = signal<TaskStats>({ total: 0, pending: 0, inProgress: 0, completed: 0 });
   private usersSignal = signal<User[]>([]);
   private loadingSignal = signal<boolean>(false);
+  private paginationSignal = signal<Pagination>({ page: 1, limit: 10, total: 0, totalPages: 0, hasNext: false, hasPrev: false });
 
   readonly tasks = this.tasksSignal.asReadonly();
   readonly stats = this.statsSignal.asReadonly();
   readonly users = this.usersSignal.asReadonly();
   readonly loading = this.loadingSignal.asReadonly();
+  readonly pagination = this.paginationSignal.asReadonly();
 
   constructor(private http: HttpClient) {}
 
-  loadTasks(status?: TaskStatus, assignedTo?: number): Observable<{ tasks: Task[] }> {
+  loadTasks(status?: TaskStatus, assignedTo?: number, page: number = 1, limit: number = 10): Observable<TasksResponse> {
     let params = new HttpParams();
     if (status) params = params.set('status', status);
     if (assignedTo) params = params.set('assigned_to', assignedTo.toString());
+    params = params.set('page', page.toString());
+    params = params.set('limit', limit.toString());
 
     this.loadingSignal.set(true);
-    return this.http.get<{ tasks: Task[] }>(this.apiUrl, { params }).pipe(
+    return this.http.get<TasksResponse>(this.apiUrl, { params }).pipe(
       tap(response => {
         this.tasksSignal.set(response.tasks);
+        this.paginationSignal.set(response.pagination);
         this.loadingSignal.set(false);
       })
     );
@@ -79,5 +98,17 @@ export class TaskService {
 
   removeTaskFromList(taskId: number): void {
     this.tasksSignal.update(tasks => tasks.filter(t => t.id !== taskId));
+  }
+
+  bulkCreateTasks(file: File): Observable<{
+    message: string;
+    results: { success: { title: string; id: number }[]; failed: { title: string; reason: string }[] }
+  }> {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.http.post<{
+      message: string;
+      results: { success: { title: string; id: number }[]; failed: { title: string; reason: string }[] }
+    }>(`${this.apiUrl}/bulk`, formData);
   }
 }
