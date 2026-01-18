@@ -2,22 +2,15 @@ import { Request } from 'express';
 
 export type UserRole = 'admin' | 'member';
 
-export interface AuthRequest extends Request {
-  user?: {
-    id: number;
-    username: string;
-    email: string;
-    org_id: number | null;
-    role: UserRole;
-  };
-}
-
 export interface JwtPayload {
   id: number;
-  username: string;
   email: string;
   org_id: number | null;
   role: UserRole;
+}
+
+export interface AuthRequest extends Request {
+  user?: JwtPayload;
 }
 
 export type TaskStatus = 'Pending' | 'In Progress' | 'Completed';

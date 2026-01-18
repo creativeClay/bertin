@@ -52,11 +52,11 @@ import { AuthService } from '../../services';
                   class="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
                 >
                   <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
-                    {{ authService.currentUser()?.username?.charAt(0)?.toUpperCase() }}
+                    {{ authService.currentUser()?.initials || authService.currentUser()?.first_name?.charAt(0)?.toUpperCase() }}
                   </div>
                   <div class="text-left hidden sm:block">
                     <p class="text-sm font-medium text-gray-900">
-                      {{ authService.currentUser()?.username }}
+                      {{ authService.currentUser()?.display_name || authService.currentUser()?.first_name }}
                     </p>
                     <p class="text-xs text-gray-500">
                       {{ authService.currentUser()?.role === 'admin' ? 'Admin' : 'Member' }}
@@ -70,7 +70,7 @@ import { AuthService } from '../../services';
                 @if (showDropdown) {
                   <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
                     <div class="px-4 py-2 border-b border-gray-100">
-                      <p class="text-sm font-medium text-gray-900">{{ authService.currentUser()?.username }}</p>
+                      <p class="text-sm font-medium text-gray-900">{{ authService.currentUser()?.full_name }}</p>
                       <p class="text-xs text-gray-500">{{ authService.currentUser()?.email }}</p>
                     </div>
                     <a

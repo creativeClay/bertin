@@ -21,7 +21,7 @@ export const getOrganization = async (req: AuthRequest, res: Response): Promise<
 
     const organization = await Organization.findByPk(orgId, {
       include: [
-        { model: User, as: 'owner', attributes: ['id', 'username', 'email'] }
+        { model: User, as: 'owner', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
 
@@ -48,9 +48,9 @@ export const getOrganizationMembers = async (req: AuthRequest, res: Response): P
 
     const members = await User.findAll({
       where: { org_id: orgId },
-      attributes: ['id', 'username', 'email', 'role', 'createdAt'],
+      attributes: ['id', 'first_name', 'last_name', 'email', 'role', 'createdAt'],
       include: [
-        { model: User, as: 'inviter', attributes: ['id', 'username'] }
+        { model: User, as: 'inviter', attributes: ['id', 'first_name', 'last_name'] }
       ],
       order: [['createdAt', 'ASC']]
     });

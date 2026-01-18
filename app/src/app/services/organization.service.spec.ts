@@ -17,7 +17,8 @@ describe('OrganizationService', () => {
 
   const mockMember: User = {
     id: 2,
-    username: 'member',
+    first_name: 'Member',
+    last_name: 'User',
     email: 'member@test.com',
     org_id: 1,
     role: 'member',
@@ -208,14 +209,14 @@ describe('OrganizationService', () => {
 
   describe('acceptInvite', () => {
     it('should accept invite (public endpoint)', () => {
-      service.acceptInvite('test-token', { username: 'newuser', password: 'password' }).subscribe(response => {
-        expect(response.user.username).toBe('newuser');
+      service.acceptInvite('test-token', { first_name: 'New', last_name: 'User', password: 'password' }).subscribe(response => {
+        expect(response.user.first_name).toBe('New');
       });
 
       const req = httpMock.expectOne(`${environment.apiUrl}/invites/test-token/accept`);
       expect(req.request.method).toBe('POST');
-      expect(req.request.body).toEqual({ username: 'newuser', password: 'password' });
-      req.flush({ user: { username: 'newuser' }, token: 'new-token' });
+      expect(req.request.body).toEqual({ first_name: 'New', last_name: 'User', password: 'password' });
+      req.flush({ user: { first_name: 'New', last_name: 'User' }, token: 'new-token' });
     });
   });
 });

@@ -18,7 +18,7 @@ export const getNotifications = async (req: AuthRequest, res: Response): Promise
     const notifications = await Notification.findAll({
       where,
       include: [
-        { model: User, as: 'actor', attributes: ['id', 'username', 'email'] },
+        { model: User, as: 'actor', attributes: ['id', 'first_name', 'last_name', 'email'] },
         { model: Task, as: 'task', attributes: ['id', 'title', 'status'] }
       ],
       order: [['createdAt', 'DESC']],
@@ -152,7 +152,7 @@ export const createNotification = async (
   // Fetch with associations for Socket.IO broadcast
   const fullNotification = await Notification.findByPk(notification.id, {
     include: [
-      { model: User, as: 'actor', attributes: ['id', 'username', 'email'] },
+      { model: User, as: 'actor', attributes: ['id', 'first_name', 'last_name', 'email'] },
       { model: Task, as: 'task', attributes: ['id', 'title', 'status'] }
     ]
   });

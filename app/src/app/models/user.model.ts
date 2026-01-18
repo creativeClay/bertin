@@ -11,13 +11,19 @@ export interface Organization {
 
 export interface User {
   id: number;
-  username: string;
+  first_name: string;
+  last_name: string;
+  middle_name?: string | null;
   email: string;
   org_id: number | null;
   role: UserRole;
   invited_by: number | null;
   organization?: Organization;
-  inviter?: { id: number; username: string };
+  inviter?: { id: number; first_name: string; last_name: string };
+  // Computed fields from backend
+  full_name?: string;
+  display_name?: string;
+  initials?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -35,7 +41,9 @@ export interface LoginRequest {
 }
 
 export interface RegisterRequest {
-  username: string;
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
   email: string;
   password: string;
   organizationName: string;
@@ -50,11 +58,13 @@ export interface Invite {
   accepted: boolean;
   expires_at: string;
   organization?: Organization;
-  inviter?: { id: number; username: string };
+  inviter?: { id: number; first_name: string; last_name: string };
   createdAt: string;
 }
 
 export interface AcceptInviteRequest {
-  username: string;
+  first_name: string;
+  last_name: string;
+  middle_name?: string;
   password: string;
 }

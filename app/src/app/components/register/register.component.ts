@@ -33,18 +33,33 @@ import { AuthService, NotificationService } from '../../services';
 
           <p class="text-sm text-gray-600 mb-4">Admin Account Details</p>
 
-          <div class="mb-4">
-            <label class="label" for="username">Username</label>
-            <input
-              type="text"
-              id="username"
-              formControlName="username"
-              class="input"
-              placeholder="Enter your username"
-            />
-            @if (form.get('username')?.touched && form.get('username')?.invalid) {
-              <p class="text-red-500 text-sm mt-1">Username is required (min 3 characters)</p>
-            }
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="label" for="first_name">First Name</label>
+              <input
+                type="text"
+                id="first_name"
+                formControlName="first_name"
+                class="input"
+                placeholder="First name"
+              />
+              @if (form.get('first_name')?.touched && form.get('first_name')?.invalid) {
+                <p class="text-red-500 text-sm mt-1">First name is required</p>
+              }
+            </div>
+            <div>
+              <label class="label" for="last_name">Last Name</label>
+              <input
+                type="text"
+                id="last_name"
+                formControlName="last_name"
+                class="input"
+                placeholder="Last name"
+              />
+              @if (form.get('last_name')?.touched && form.get('last_name')?.invalid) {
+                <p class="text-red-500 text-sm mt-1">Last name is required</p>
+              }
+            </div>
           </div>
 
           <div class="mb-4">
@@ -104,7 +119,8 @@ export class RegisterComponent {
   ) {
     this.form = this.fb.group({
       organizationName: ['', Validators.required],
-      username: ['', [Validators.required, Validators.minLength(3)]],
+      first_name: ['', Validators.required],
+      last_name: ['', Validators.required],
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });

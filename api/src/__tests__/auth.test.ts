@@ -11,7 +11,8 @@ describe('Auth Controller', () => {
       const response = await request(app)
         .post('/api/auth/register')
         .send({
-          username: 'newadmin',
+          first_name: 'John',
+          last_name: 'Doe',
           email: 'newadmin@example.com',
           password: 'password123',
           organizationName: 'New Organization'
@@ -20,7 +21,9 @@ describe('Auth Controller', () => {
       expect(response.status).toBe(201);
       expect(response.body.message).toBe('Organization created successfully');
       expect(response.body.user).toBeDefined();
-      expect(response.body.user.username).toBe('newadmin');
+      expect(response.body.user.first_name).toBe('John');
+      expect(response.body.user.last_name).toBe('Doe');
+      expect(response.body.user.full_name).toBe('John Doe');
       expect(response.body.user.role).toBe('admin');
       expect(response.body.organization).toBeDefined();
       expect(response.body.organization.name).toBe('New Organization');
@@ -31,7 +34,7 @@ describe('Auth Controller', () => {
       const response = await request(app)
         .post('/api/auth/register')
         .send({
-          username: 'newadmin',
+          first_name: 'John',
           email: 'newadmin@example.com'
         });
 
@@ -45,7 +48,8 @@ describe('Auth Controller', () => {
       const response = await request(app)
         .post('/api/auth/register')
         .send({
-          username: 'newuser',
+          first_name: 'Jane',
+          last_name: 'Smith',
           email: 'existing@example.com',
           password: 'password123',
           organizationName: 'Test Org'
@@ -53,22 +57,6 @@ describe('Auth Controller', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('Email already registered');
-    });
-
-    it('should fail if username already exists', async () => {
-      await createTestUser({ username: 'existinguser' });
-
-      const response = await request(app)
-        .post('/api/auth/register')
-        .send({
-          username: 'existinguser',
-          email: 'new@example.com',
-          password: 'password123',
-          organizationName: 'Test Org'
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Username already taken');
     });
   });
 

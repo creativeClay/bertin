@@ -57,7 +57,7 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
             >
               <option value="">All Users</option>
               @for (user of taskService.users(); track user.id) {
-                <option [value]="user.id">{{ user.username }}</option>
+                <option [value]="user.id">{{ getUserDisplayName(user) }}</option>
               }
             </select>
           </div>
@@ -116,7 +116,7 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                       </span>
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-600">
-                      {{ task.assignee?.username || 'Unassigned' }}
+                      {{ getAssigneeName(task) }}
                     </td>
                     <td class="px-6 py-4 text-sm" [class.text-red-600]="isOverdue(task)">
                       {{ task.due_date ? (task.due_date | date:'mediumDate') : '-' }}
@@ -232,7 +232,7 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Assigned To</h3>
                   <div class="mt-1">
                     @if (viewTask.assignee) {
-                      <p class="text-gray-900 font-medium">{{ viewTask.assignee.username }}</p>
+                      <p class="text-gray-900 font-medium">{{ getAssigneeName(viewTask) }}</p>
                       <p class="text-sm text-gray-500">{{ viewTask.assignee.email }}</p>
                     } @else {
                       <p class="text-gray-500">Unassigned</p>
@@ -244,7 +244,7 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Created By</h3>
                   <div class="mt-1">
                     @if (viewTask.creator) {
-                      <p class="text-gray-900 font-medium">{{ viewTask.creator.username }}</p>
+                      <p class="text-gray-900 font-medium">{{ getCreatorName(viewTask) }}</p>
                       <p class="text-sm text-gray-500">{{ viewTask.creator.email }}</p>
                     } @else {
                       <p class="text-gray-500">Unknown</p>
@@ -413,9 +413,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
       `"${task.title.replace(/"/g, '""')}"`,
       `"${(task.description || '').replace(/"/g, '""')}"`,
       task.status,
-      task.assignee?.username || 'Unassigned',
+      this.getAssigneeName(task),
       task.due_date ? new Date(task.due_date).toLocaleDateString() : '',
-      task.creator?.username || '',
+      this.getCreatorName(task),
       new Date(task.createdAt).toLocaleString(),
       new Date(task.updatedAt).toLocaleString()
     ]);
@@ -452,6 +452,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isOverdue(task: Task): boolean {
     if (!task.due_date || task.status === 'Completed') return false;
     return new Date(task.due_date) < new Date();
+  }
+
+  getUserDisplayName(user: User): string {
+    return user.full_name || `${user.first_name} ${user.last_name}`;
+  }
+
+  getAssigneeName(task: Task): string {
+    if (!task.assignee) return 'Unassigned';
+    return task.assignee.full_name || `${task.assignee.first_name} ${task.assignee.last_name}`;
+  }
+
+  getCreatorName(task: Task): string {
+    if (!task.creator) return '';
+    return task.creator.full_name || `${task.creator.first_name} ${task.creator.last_name}`;
   }
 
   private setupSocketListeners(): void {

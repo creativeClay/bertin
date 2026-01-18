@@ -12,11 +12,15 @@ describe('NavbarComponent', () => {
 
   const mockUser: User = {
     id: 1,
-    username: 'testuser',
+    first_name: 'Test',
+    last_name: 'User',
     email: 'test@example.com',
     org_id: 1,
     role: 'admin',
-    invited_by: null
+    invited_by: null,
+    full_name: 'Test User',
+    display_name: 'Test U.',
+    initials: 'TU'
   };
 
   beforeEach(async () => {
@@ -42,9 +46,9 @@ describe('NavbarComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display username when authenticated', () => {
+  it('should display user name when authenticated', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.textContent).toContain('testuser');
+    expect(compiled.textContent).toContain('Test U.');
   });
 
   it('should display role when authenticated', () => {

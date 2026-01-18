@@ -36,7 +36,7 @@ export const initializeSocket = (server: HttpServer): Server => {
 
   io.on('connection', (socket: Socket) => {
     const user = (socket as any).user as JwtPayload;
-    console.log(`User connected: ${user.username} (${user.id})`);
+    console.log(`User connected: ${user.email} (${user.id})`);
 
     // Join user-specific room for targeted notifications
     socket.join(`user_${user.id}`);
@@ -47,7 +47,7 @@ export const initializeSocket = (server: HttpServer): Server => {
     }
 
     socket.on('disconnect', () => {
-      console.log(`User disconnected: ${user.username} (${user.id})`);
+      console.log(`User disconnected: ${user.email} (${user.id})`);
     });
   });
 

@@ -70,8 +70,8 @@ describe('Organization Controller', () => {
   describe('GET /api/organization/members', () => {
     it('should return all organization members', async () => {
       const { admin, org } = await createTestAdmin();
-      await createTestUser({ org_id: org.id, username: 'member1' });
-      await createTestUser({ org_id: org.id, username: 'member2' });
+      await createTestUser({ org_id: org.id, first_name: 'Member', last_name: 'One' });
+      await createTestUser({ org_id: org.id, first_name: 'Member', last_name: 'Two' });
       const token = getAuthToken(admin);
 
       const response = await request(app)

@@ -13,10 +13,10 @@ const generateSlug = (name: string): string => {
 
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { username, email, password, organizationName } = req.body;
+    const { first_name, last_name, middle_name, email, password, organizationName } = req.body;
 
-    if (!username || !email || !password || !organizationName) {
-      res.status(400).json({ error: 'Username, email, password, and organization name are required' });
+    if (!first_name || !last_name || !email || !password || !organizationName) {
+      res.status(400).json({ error: 'First name, last name, email, password, and organization name are required' });
       return;
     }
 
@@ -29,18 +29,11 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const existingUsername = await User.findOne({
-      where: { username }
-    });
-
-    if (existingUsername) {
-      res.status(400).json({ error: 'Username already taken' });
-      return;
-    }
-
     // Create user first (without org)
     const user = await User.create({
-      username,
+      first_name,
+      last_name,
+      middle_name: middle_name || null,
       email,
       password,
       role: 'admin'
@@ -59,7 +52,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
     const token = generateToken({
       id: user.id,
-      username: user.username,
       email: user.email,
       org_id: user.org_id,
       role: user.role
@@ -107,7 +99,6 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const token = generateToken({
       id: user.id,
-      username: user.username,
       email: user.email,
       org_id: user.org_id,
       role: user.role

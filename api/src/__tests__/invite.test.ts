@@ -245,54 +245,42 @@ describe('Invite Controller', () => {
       const response = await request(app)
         .post(`/api/invites/${invite.token}/accept`)
         .send({
-          username: 'newmember',
+          first_name: 'New',
+          last_name: 'Member',
           password: 'password123'
         });
 
       expect(response.status).toBe(201);
       expect(response.body.message).toBe('Account created successfully');
       expect(response.body.user).toBeDefined();
-      expect(response.body.user.username).toBe('newmember');
+      expect(response.body.user.first_name).toBe('New');
+      expect(response.body.user.last_name).toBe('Member');
+      expect(response.body.user.full_name).toBe('New Member');
       expect(response.body.user.org_id).toBe(org.id);
       expect(response.body.user.role).toBe('member');
       expect(response.body.token).toBeDefined();
     });
 
-    it('should fail without username or password', async () => {
+    it('should fail without required fields', async () => {
       const { admin, org } = await createTestAdmin();
       const invite = await createTestInvite(org.id, admin.id);
 
       const response = await request(app)
         .post(`/api/invites/${invite.token}/accept`)
         .send({
-          username: 'newmember'
+          first_name: 'New'
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Username and password are required');
-    });
-
-    it('should fail if username already exists', async () => {
-      const { admin, org } = await createTestAdmin();
-      await createTestUser({ username: 'existinguser' });
-      const invite = await createTestInvite(org.id, admin.id);
-
-      const response = await request(app)
-        .post(`/api/invites/${invite.token}/accept`)
-        .send({
-          username: 'existinguser',
-          password: 'password123'
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Username is already taken');
+      expect(response.body.error).toBe('First name, last name, and password are required');
     });
 
     it('should return 404 for invalid token', async () => {
       const response = await request(app)
         .post('/api/invites/invalidtoken/accept')
         .send({
-          username: 'newmember',
+          first_name: 'New',
+          last_name: 'Member',
           password: 'password123'
         });
 
@@ -308,7 +296,8 @@ describe('Invite Controller', () => {
       const response = await request(app)
         .post(`/api/invites/${invite.token}/accept`)
         .send({
-          username: 'newmember',
+          first_name: 'New',
+          last_name: 'Member',
           password: 'password123'
         });
 

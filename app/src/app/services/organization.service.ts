@@ -94,7 +94,7 @@ export class OrganizationService {
     return this.http.get<{ invite: Invite }>(`${this.inviteApiUrl}/${token}`);
   }
 
-  acceptInvite(token: string, data: { username: string; password: string }): Observable<any> {
+  acceptInvite(token: string, data: { first_name: string; last_name: string; middle_name?: string; password: string }): Observable<any> {
     return this.http.post(`${this.inviteApiUrl}/${token}/accept`, data);
   }
 }

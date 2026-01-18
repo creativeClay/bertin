@@ -10,15 +10,20 @@ export const createTestOrganization = async (userId: number) => {
 };
 
 export const createTestUser = async (overrides: Partial<{
-  username: string;
+  first_name: string;
+  last_name: string;
+  middle_name: string | null;
   email: string;
   password: string;
   org_id: number | null;
   role: 'admin' | 'member';
 }> = {}) => {
+  const timestamp = Date.now();
   const defaults = {
-    username: 'testuser' + Date.now(),
-    email: `test${Date.now()}@example.com`,
+    first_name: 'Test',
+    last_name: 'User' + timestamp,
+    middle_name: null,
+    email: `test${timestamp}@example.com`,
     password: 'password123',
     org_id: null,
     role: 'member' as const
@@ -28,9 +33,11 @@ export const createTestUser = async (overrides: Partial<{
 };
 
 export const createTestAdmin = async () => {
+  const timestamp = Date.now();
   const admin = await User.create({
-    username: 'admin' + Date.now(),
-    email: `admin${Date.now()}@example.com`,
+    first_name: 'Admin',
+    last_name: 'User' + timestamp,
+    email: `admin${timestamp}@example.com`,
     password: 'password123',
     role: 'admin'
   });
@@ -80,7 +87,6 @@ export const createTestInvite = async (orgId: number, invitedBy: number, email?:
 export const getAuthToken = (user: User) => {
   return generateToken({
     id: user.id,
-    username: user.username,
     email: user.email,
     org_id: user.org_id,
     role: user.role

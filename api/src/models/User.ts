@@ -6,7 +6,9 @@ export type UserRole = 'admin' | 'member';
 
 interface UserAttributes {
   id: number;
-  username: string;
+  first_name: string;
+  last_name: string;
+  middle_name: string | null;
   email: string;
   password: string;
   org_id: number | null;
@@ -16,11 +18,13 @@ interface UserAttributes {
   updatedAt?: Date;
 }
 
-interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'org_id' | 'role' | 'invited_by'> {}
+interface UserCreationAttributes extends Optional<UserAttributes, 'id' | 'org_id' | 'role' | 'invited_by' | 'middle_name'> {}
 
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   public id!: number;
-  public username!: string;
+  public first_name!: string;
+  public last_name!: string;
+  public middle_name!: string | null;
   public email!: string;
   public password!: string;
   public org_id!: number | null;
@@ -28,6 +32,24 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public invited_by!: number | null;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+
+  // Virtual getter for full name
+  public get full_name(): string {
+    if (this.middle_name) {
+      return `${this.first_name} ${this.middle_name} ${this.last_name}`;
+    }
+    return `${this.first_name} ${this.last_name}`;
+  }
+
+  // Virtual getter for display name (first name + last initial)
+  public get display_name(): string {
+    return `${this.first_name} ${this.last_name.charAt(0)}.`;
+  }
+
+  // Virtual getter for initials
+  public get initials(): string {
+    return `${this.first_name.charAt(0)}${this.last_name.charAt(0)}`.toUpperCase();
+  }
 
   public async validatePassword(password: string): Promise<boolean> {
     return bcrypt.compare(password, this.password);
@@ -37,9 +59,13 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
     return this.role === 'admin';
   }
 
-  public toJSON(): Omit<UserAttributes, 'password'> {
-    const values = { ...this.get() };
-    delete (values as any).password;
+  public toJSON(): any {
+    const values = { ...this.get() } as any;
+    delete values.password;
+    // Add virtual fields
+    values.full_name = this.full_name;
+    values.display_name = this.display_name;
+    values.initials = this.initials;
     return values;
   }
 }
@@ -51,10 +77,17 @@ User.init(
       primaryKey: true,
       autoIncrement: true
     },
-    username: {
+    first_name: {
       type: DataTypes.STRING(50),
-      allowNull: false,
-      unique: true
+      allowNull: false
+    },
+    last_name: {
+      type: DataTypes.STRING(50),
+      allowNull: false
+    },
+    middle_name: {
+      type: DataTypes.STRING(50),
+      allowNull: true
     },
     email: {
       type: DataTypes.STRING(100),

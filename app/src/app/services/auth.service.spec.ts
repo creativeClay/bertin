@@ -40,25 +40,28 @@ describe('AuthService', () => {
         message: 'Organization created successfully',
         user: {
           id: 1,
-          username: 'admin',
+          first_name: 'Admin',
+          last_name: 'User',
           email: 'admin@test.com',
           org_id: 1,
           role: 'admin' as const,
-          invited_by: null
+          invited_by: null,
+          full_name: 'Admin User'
         },
         organization: { id: 1, name: 'Test Org', slug: 'test-org', created_by: 1 },
         token: 'test-token'
       };
 
       service.register({
-        username: 'admin',
+        first_name: 'Admin',
+        last_name: 'User',
         email: 'admin@test.com',
         password: 'password',
         organizationName: 'Test Org'
       }).subscribe(response => {
         expect(response).toEqual(mockResponse);
         expect(localStorage.setItem).toHaveBeenCalledWith('auth_token', 'test-token');
-        expect(service.currentUser()?.username).toBe('admin');
+        expect(service.currentUser()?.first_name).toBe('Admin');
         expect(service.isAuthenticated()).toBe(true);
         expect(service.isAdmin()).toBe(true);
       });
@@ -75,7 +78,8 @@ describe('AuthService', () => {
         message: 'Login successful',
         user: {
           id: 1,
-          username: 'testuser',
+          first_name: 'Test',
+          last_name: 'User',
           email: 'test@test.com',
           org_id: 1,
           role: 'member' as const,
@@ -105,7 +109,8 @@ describe('AuthService', () => {
       // First login
       const mockUser = {
         id: 1,
-        username: 'test',
+        first_name: 'Test',
+        last_name: 'User',
         email: 'test@test.com',
         org_id: 1,
         role: 'member' as const,
@@ -142,7 +147,8 @@ describe('AuthService', () => {
     it('should return true for admin user', () => {
       const adminUser = {
         id: 1,
-        username: 'admin',
+        first_name: 'Admin',
+        last_name: 'User',
         email: 'admin@test.com',
         org_id: 1,
         role: 'admin' as const,
@@ -155,7 +161,8 @@ describe('AuthService', () => {
     it('should return false for member user', () => {
       const memberUser = {
         id: 1,
-        username: 'member',
+        first_name: 'Member',
+        last_name: 'User',
         email: 'member@test.com',
         org_id: 1,
         role: 'member' as const,
@@ -170,7 +177,8 @@ describe('AuthService', () => {
     it('should return true if user has org_id', () => {
       const user = {
         id: 1,
-        username: 'test',
+        first_name: 'Test',
+        last_name: 'User',
         email: 'test@test.com',
         org_id: 1,
         role: 'member' as const,
@@ -183,7 +191,8 @@ describe('AuthService', () => {
     it('should return false if user has no org_id', () => {
       const user = {
         id: 1,
-        username: 'test',
+        first_name: 'Test',
+        last_name: 'User',
         email: 'test@test.com',
         org_id: null,
         role: 'member' as const,

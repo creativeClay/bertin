@@ -72,7 +72,7 @@ import { Task, TaskStatus, User, CreateTaskRequest, UpdateTaskRequest } from '..
             <select id="assigned_to" formControlName="assigned_to" class="input">
               <option [ngValue]="null">Unassigned</option>
               @for (user of users; track user.id) {
-                <option [ngValue]="user.id">{{ user.username }}</option>
+                <option [ngValue]="user.id">{{ getUserDisplayName(user) }}</option>
               }
             </select>
           </div>
@@ -123,5 +123,9 @@ export class TaskModalComponent implements OnInit {
 
   private formatDate(date: string): string {
     return new Date(date).toISOString().split('T')[0];
+  }
+
+  getUserDisplayName(user: User): string {
+    return user.full_name || `${user.first_name} ${user.last_name}`;
   }
 }

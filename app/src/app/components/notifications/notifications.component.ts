@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { NavbarComponent } from '../navbar/navbar.component';
 import { AppNotificationService, SocketService, NotificationService } from '../../services';
-import { Notification, NotificationType } from '../../models';
+import { Notification, NotificationType, User } from '../../models';
 
 @Component({
   selector: 'app-notifications',
@@ -104,7 +104,7 @@ import { Notification, NotificationType } from '../../models';
                       @if (notification.actor) {
                         <span class="text-sm text-gray-400">•</span>
                         <p class="text-sm text-gray-500">
-                          by {{ notification.actor.username }}
+                          by {{ getActorName(notification.actor) }}
                         </p>
                       }
                     </div>
@@ -230,5 +230,9 @@ export class NotificationsComponent implements OnInit, OnDestroy {
       default:
         return `${base} bg-gray-100 text-gray-600`;
     }
+  }
+
+  getActorName(actor: User): string {
+    return actor.full_name || `${actor.first_name} ${actor.last_name}`;
   }
 }

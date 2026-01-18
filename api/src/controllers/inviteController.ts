@@ -64,7 +64,7 @@ export const createInvite = async (req: AuthRequest, res: Response): Promise<voi
     const inviteWithDetails = await Invite.findByPk(invite.id, {
       include: [
         { model: Organization, as: 'organization', attributes: ['id', 'name'] },
-        { model: User, as: 'inviter', attributes: ['id', 'username'] }
+        { model: User, as: 'inviter', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
 
@@ -77,7 +77,7 @@ export const createInvite = async (req: AuthRequest, res: Response): Promise<voi
         email,
         invite.token,
         organization?.name || 'Organization',
-        inviter?.username || 'Admin'
+        inviter?.full_name || 'Admin'
       );
     } catch (emailError) {
       console.error('Failed to send invite email:', emailError);
@@ -111,7 +111,7 @@ export const getInvites = async (req: AuthRequest, res: Response): Promise<void>
     const invites = await Invite.findAll({
       where: { org_id: orgId },
       include: [
-        { model: User, as: 'inviter', attributes: ['id', 'username'] }
+        { model: User, as: 'inviter', attributes: ['id', 'first_name', 'last_name'] }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -131,7 +131,7 @@ export const getInviteByToken = async (req: Request, res: Response): Promise<voi
       where: { token },
       include: [
         { model: Organization, as: 'organization', attributes: ['id', 'name'] },
-        { model: User, as: 'inviter', attributes: ['id', 'username'] }
+        { model: User, as: 'inviter', attributes: ['id', 'first_name', 'last_name'] }
       ]
     });
 
@@ -160,10 +160,10 @@ export const getInviteByToken = async (req: Request, res: Response): Promise<voi
 export const acceptInvite = async (req: Request, res: Response): Promise<void> => {
   try {
     const { token } = req.params;
-    const { username, password } = req.body;
+    const { first_name, last_name, middle_name, password } = req.body;
 
-    if (!username || !password) {
-      res.status(400).json({ error: 'Username and password are required' });
+    if (!first_name || !last_name || !password) {
+      res.status(400).json({ error: 'First name, last name, and password are required' });
       return;
     }
 
@@ -204,7 +204,6 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
 
         const jwtToken = generateToken({
           id: existingUser.id,
-          username: existingUser.username,
           email: existingUser.email,
           org_id: existingUser.org_id,
           role: existingUser.role
@@ -222,16 +221,11 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
       return;
     }
 
-    // Check username availability
-    const existingUsername = await User.findOne({ where: { username } });
-    if (existingUsername) {
-      res.status(400).json({ error: 'Username is already taken' });
-      return;
-    }
-
     // Create new user
     const user = await User.create({
-      username,
+      first_name,
+      last_name,
+      middle_name: middle_name || null,
       email: invite.email,
       password,
       org_id: invite.org_id,
@@ -245,7 +239,6 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
 
     const jwtToken = generateToken({
       id: user.id,
-      username: user.username,
       email: user.email,
       org_id: user.org_id,
       role: user.role
@@ -306,7 +299,7 @@ export const resendInvite = async (req: AuthRequest, res: Response): Promise<voi
         invite.email,
         invite.token,
         organization?.name || 'Organization',
-        inviter?.username || 'Admin'
+        inviter?.full_name || 'Admin'
       );
     } catch (emailError) {
       console.error('Failed to resend invite email:', emailError);

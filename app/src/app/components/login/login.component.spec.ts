@@ -104,7 +104,7 @@ describe('LoginComponent', () => {
   it('should call login service on valid submit', () => {
     const mockResponse = {
       message: 'Success',
-      user: { id: 1, username: 'test', email: 'test@example.com', org_id: 1, role: 'member' as const, invited_by: null },
+      user: { id: 1, first_name: 'Test', last_name: 'User', email: 'test@example.com', org_id: 1, role: 'member' as const, invited_by: null },
       token: 'token'
     };
     authServiceSpy.login.mockReturnValue(of(mockResponse));
@@ -124,7 +124,7 @@ describe('LoginComponent', () => {
   it('should navigate to dashboard on successful login', () => {
     const mockResponse = {
       message: 'Success',
-      user: { id: 1, username: 'test', email: 'test@example.com', org_id: 1, role: 'member' as const, invited_by: null },
+      user: { id: 1, first_name: 'Test', last_name: 'User', email: 'test@example.com', org_id: 1, role: 'member' as const, invited_by: null },
       token: 'token'
     };
     authServiceSpy.login.mockReturnValue(of(mockResponse));
@@ -155,7 +155,7 @@ describe('LoginComponent', () => {
   it('should set loading state during login', () => {
     authServiceSpy.login.mockReturnValue(of({
       message: 'Success',
-      user: { id: 1, username: 'test', email: 'test@example.com', org_id: 1, role: 'member' as const, invited_by: null },
+      user: { id: 1, first_name: 'Test', last_name: 'User', email: 'test@example.com', org_id: 1, role: 'member' as const, invited_by: null },
       token: 'token'
     }));
 

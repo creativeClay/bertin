@@ -39,8 +39,8 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
 
     const taskWithAssociations = await Task.findByPk(task.id, {
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'username', 'email'] },
-        { model: User, as: 'creator', attributes: ['id', 'username', 'email'] }
+        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
 
@@ -69,12 +69,12 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       if (assignee?.email) {
         sendTaskNotificationEmail('task_created', {
           recipientEmail: assignee.email,
-          recipientName: assignee.username,
+          recipientName: assignee.full_name,
           taskTitle: task.title,
           taskDescription: task.description || undefined,
           taskStatus: task.status,
           taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-          assignerName: creator?.username,
+          assignerName: creator?.full_name,
           organizationName: organization?.name
         });
       }
@@ -99,8 +99,8 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
     const tasks = await Task.findAll({
       where,
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'username', 'email'] },
-        { model: User, as: 'creator', attributes: ['id', 'username', 'email'] }
+        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ],
       order: [['createdAt', 'DESC']]
     });
@@ -120,8 +120,8 @@ export const getTaskById = async (req: AuthRequest, res: Response): Promise<void
     const task = await Task.findOne({
       where: { id, org_id },
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'username', 'email'] },
-        { model: User, as: 'creator', attributes: ['id', 'username', 'email'] }
+        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
 
@@ -174,8 +174,8 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
 
     const updatedTask = await Task.findByPk(id, {
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'username', 'email'] },
-        { model: User, as: 'creator', attributes: ['id', 'username', 'email'] }
+        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
 
@@ -183,7 +183,8 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
     const io = getIO();
     io.to(`org_${org_id}`).emit('task_update', { action: 'updated', task: updatedTask });
 
-    const currentUser = req.user!;
+    const currentUserId = req.user!.id;
+    const currentUser = await User.findByPk(currentUserId);
     const organization = await Organization.findByPk(org_id);
 
     // Notify if status changed
@@ -196,7 +197,7 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         'Task Updated',
         `Task "${task.title}" status changed to ${status}`,
         task.id,
-        currentUser.id
+        currentUserId
       );
 
       // Email notification
@@ -204,12 +205,12 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
       if (assignee?.email) {
         sendTaskNotificationEmail('task_updated', {
           recipientEmail: assignee.email,
-          recipientName: assignee.username,
+          recipientName: assignee.full_name,
           taskTitle: task.title,
           taskDescription: task.description || undefined,
           taskStatus: task.status,
           taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-          assignerName: currentUser.username,
+          assignerName: currentUser?.full_name,
           organizationName: organization?.name
         });
       }
@@ -225,7 +226,7 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         'Task Assigned',
         `You have been assigned to task: ${task.title}`,
         task.id,
-        currentUser.id
+        currentUserId
       );
 
       // Email notification
@@ -233,12 +234,12 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
       if (newAssignee?.email) {
         sendTaskNotificationEmail('task_assigned', {
           recipientEmail: newAssignee.email,
-          recipientName: newAssignee.username,
+          recipientName: newAssignee.full_name,
           taskTitle: task.title,
           taskDescription: task.description || undefined,
           taskStatus: task.status,
           taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-          assignerName: currentUser.username,
+          assignerName: currentUser?.full_name,
           organizationName: organization?.name
         });
       }
@@ -267,14 +268,16 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
     const taskTitle = task.title;
     const taskDescription = task.description;
     const assignedTo = task.assigned_to;
-    const currentUser = req.user!;
+    const currentUserId = req.user!.id;
 
-    // Get assignee info before deleting
+    // Get assignee and current user info before deleting
     let assignee: User | null = null;
     let organization: Organization | null = null;
+    let currentUser: User | null = null;
     if (assignedTo) {
       assignee = await User.findByPk(assignedTo);
       organization = await Organization.findByPk(org_id);
+      currentUser = await User.findByPk(currentUserId);
     }
 
     // Create notification before deleting task (task_id will be null after deletion)
@@ -287,17 +290,17 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
         'Task Deleted',
         `Task "${taskTitle}" has been deleted`,
         null, // task_id is null since task is being deleted
-        currentUser.id
+        currentUserId
       );
 
       // Email notification
       if (assignee?.email) {
         sendTaskNotificationEmail('task_deleted', {
           recipientEmail: assignee.email,
-          recipientName: assignee.username,
+          recipientName: assignee.full_name,
           taskTitle: taskTitle,
           taskDescription: taskDescription || undefined,
-          assignerName: currentUser.username,
+          assignerName: currentUser?.full_name,
           organizationName: organization?.name
         });
       }
@@ -345,7 +348,7 @@ export const getUsers = async (req: AuthRequest, res: Response): Promise<void> =
 
     const users = await User.findAll({
       where: { org_id },
-      attributes: ['id', 'username', 'email', 'role']
+      attributes: ['id', 'first_name', 'last_name', 'email', 'role']
     });
 
     res.json({ users });

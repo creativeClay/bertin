@@ -40,7 +40,8 @@ describe('RegisterComponent', () => {
         template: `
           <form [formGroup]="form" (ngSubmit)="onSubmit()">
             <input formControlName="organizationName" />
-            <input formControlName="username" />
+            <input formControlName="first_name" />
+            <input formControlName="last_name" />
             <input type="email" formControlName="email" />
             <input type="password" formControlName="password" />
             <button type="submit">Register</button>
@@ -61,21 +62,14 @@ describe('RegisterComponent', () => {
 
   it('should have a form with all required fields', () => {
     expect(component.form.contains('organizationName')).toBeTruthy();
-    expect(component.form.contains('username')).toBeTruthy();
+    expect(component.form.contains('first_name')).toBeTruthy();
+    expect(component.form.contains('last_name')).toBeTruthy();
     expect(component.form.contains('email')).toBeTruthy();
     expect(component.form.contains('password')).toBeTruthy();
   });
 
   it('should mark form invalid when empty', () => {
     expect(component.form.valid).toBeFalsy();
-  });
-
-  it('should validate username minimum length', () => {
-    const usernameControl = component.form.get('username');
-    usernameControl?.setValue('ab');
-    expect(usernameControl?.valid).toBeFalsy();
-    usernameControl?.setValue('abc');
-    expect(usernameControl?.valid).toBeTruthy();
   });
 
   it('should validate password minimum length', () => {
@@ -89,7 +83,8 @@ describe('RegisterComponent', () => {
   it('should mark form valid with valid data', () => {
     component.form.setValue({
       organizationName: 'Test Org',
-      username: 'testuser',
+      first_name: 'Test',
+      last_name: 'User',
       email: 'test@example.com',
       password: 'password123'
     });
@@ -104,7 +99,7 @@ describe('RegisterComponent', () => {
   it('should call register service on valid submit', () => {
     const mockResponse = {
       message: 'Organization created',
-      user: { id: 1, username: 'testuser', email: 'test@example.com', org_id: 1, role: 'admin' as const, invited_by: null },
+      user: { id: 1, first_name: 'Test', last_name: 'User', email: 'test@example.com', org_id: 1, role: 'admin' as const, invited_by: null },
       organization: { id: 1, name: 'Test Org', slug: 'test-org', created_by: 1 },
       token: 'token'
     };
@@ -112,7 +107,8 @@ describe('RegisterComponent', () => {
 
     component.form.setValue({
       organizationName: 'Test Org',
-      username: 'testuser',
+      first_name: 'Test',
+      last_name: 'User',
       email: 'test@example.com',
       password: 'password123'
     });
@@ -120,7 +116,8 @@ describe('RegisterComponent', () => {
 
     expect(authServiceSpy.register).toHaveBeenCalledWith({
       organizationName: 'Test Org',
-      username: 'testuser',
+      first_name: 'Test',
+      last_name: 'User',
       email: 'test@example.com',
       password: 'password123'
     });
@@ -129,7 +126,7 @@ describe('RegisterComponent', () => {
   it('should navigate to dashboard on successful registration', () => {
     const mockResponse = {
       message: 'Organization created',
-      user: { id: 1, username: 'testuser', email: 'test@example.com', org_id: 1, role: 'admin' as const, invited_by: null },
+      user: { id: 1, first_name: 'Test', last_name: 'User', email: 'test@example.com', org_id: 1, role: 'admin' as const, invited_by: null },
       organization: { id: 1, name: 'Test Org', slug: 'test-org', created_by: 1 },
       token: 'token'
     };
@@ -137,7 +134,8 @@ describe('RegisterComponent', () => {
 
     component.form.setValue({
       organizationName: 'Test Org',
-      username: 'testuser',
+      first_name: 'Test',
+      last_name: 'User',
       email: 'test@example.com',
       password: 'password123'
     });
@@ -152,7 +150,8 @@ describe('RegisterComponent', () => {
 
     component.form.setValue({
       organizationName: 'Test Org',
-      username: 'testuser',
+      first_name: 'Test',
+      last_name: 'User',
       email: 'existing@example.com',
       password: 'password123'
     });
