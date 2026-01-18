@@ -1,10 +1,11 @@
 import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthRequest, JwtPayload } from '../types';
+import { User } from '../models';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -16,6 +17,14 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    // Verify user exists in database
+    const user = await User.findByPk(decoded.id);
+    if (!user) {
+      res.status(401).json({ error: 'User not found. Please login again.' });
+      return;
+    }
+
     req.user = decoded;
     next();
   } catch (error) {

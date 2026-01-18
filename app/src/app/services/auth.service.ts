@@ -1,7 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, catchError, of } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { User, AuthResponse, LoginRequest, RegisterRequest, Organization } from '../models';
 
@@ -14,6 +14,7 @@ export class AuthService {
   private readonly USER_KEY = 'auth_user';
 
   private currentUserSignal = signal<User | null>(this.getStoredUser());
+  private initialized = false;
 
   readonly currentUser = this.currentUserSignal.asReadonly();
   readonly isAuthenticated = computed(() => !!this.currentUserSignal());
@@ -23,7 +24,42 @@ export class AuthService {
   constructor(
     private http: HttpClient,
     private router: Router
-  ) {}
+  ) {
+    // Verify token on service initialization if we have stored credentials
+    if (this.getToken() && !this.initialized) {
+      this.verifyToken();
+    }
+  }
+
+  verifyToken(): void {
+    if (this.initialized) return;
+    this.initialized = true;
+
+    const token = this.getToken();
+    if (!token) {
+      this.clearAuth();
+      return;
+    }
+
+    this.http.get<{ user: User }>(`${this.apiUrl}/me`).pipe(
+      catchError(() => {
+        // Token invalid or user doesn't exist - clear auth
+        this.clearAuth();
+        return of(null);
+      })
+    ).subscribe(response => {
+      if (response?.user) {
+        this.currentUserSignal.set(response.user);
+        localStorage.setItem(this.USER_KEY, JSON.stringify(response.user));
+      }
+    });
+  }
+
+  private clearAuth(): void {
+    localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.USER_KEY);
+    this.currentUserSignal.set(null);
+  }
 
   register(data: RegisterRequest): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.apiUrl}/register`, data).pipe(
