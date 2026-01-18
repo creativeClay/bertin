@@ -182,6 +182,18 @@ describe('OrganizationService', () => {
     });
   });
 
+  describe('resendInvite', () => {
+    it('should resend invite', () => {
+      service.resendInvite(1).subscribe(response => {
+        expect(response.message).toBe('Invite resent successfully');
+      });
+
+      const req = httpMock.expectOne(`${environment.apiUrl}/organization/invites/1/resend`);
+      expect(req.request.method).toBe('POST');
+      req.flush({ message: 'Invite resent successfully' });
+    });
+  });
+
   describe('getInviteByToken', () => {
     it('should get invite by token (public endpoint)', () => {
       service.getInviteByToken('test-token').subscribe(response => {

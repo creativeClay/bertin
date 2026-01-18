@@ -105,6 +105,65 @@ describe('Invite Controller', () => {
     });
   });
 
+  describe('POST /api/organization/invites/:id/resend', () => {
+    it('should resend invite (admin only)', async () => {
+      const { admin, org } = await createTestAdmin();
+      const invite = await createTestInvite(org.id, admin.id);
+      const originalExpiry = invite.expires_at;
+      const token = getAuthToken(admin);
+
+      const response = await request(app)
+        .post(`/api/organization/invites/${invite.id}/resend`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBe('Invite resent successfully');
+
+      // Check that expiry was extended
+      const updatedInvite = await Invite.findByPk(invite.id);
+      expect(updatedInvite!.expires_at.getTime()).toBeGreaterThan(originalExpiry.getTime());
+    });
+
+    it('should fail if user is not admin', async () => {
+      const { admin, org } = await createTestAdmin();
+      const invite = await createTestInvite(org.id, admin.id);
+      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const token = getAuthToken(member);
+
+      const response = await request(app)
+        .post(`/api/organization/invites/${invite.id}/resend`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(403);
+    });
+
+    it('should return 404 for non-existent invite', async () => {
+      const { admin } = await createTestAdmin();
+      const token = getAuthToken(admin);
+
+      const response = await request(app)
+        .post('/api/organization/invites/99999/resend')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(404);
+    });
+
+    it('should fail for already accepted invite', async () => {
+      const { admin, org } = await createTestAdmin();
+      const invite = await createTestInvite(org.id, admin.id);
+      invite.accepted = true;
+      await invite.save();
+      const token = getAuthToken(admin);
+
+      const response = await request(app)
+        .post(`/api/organization/invites/${invite.id}/resend`)
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invite has already been accepted');
+    });
+  });
+
   describe('DELETE /api/organization/invites/:id', () => {
     it('should cancel invite (admin only)', async () => {
       const { admin, org } = await createTestAdmin();
