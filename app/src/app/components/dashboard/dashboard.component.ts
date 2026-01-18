@@ -63,6 +63,12 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
           </div>
 
           <div class="flex gap-2">
+            <button (click)="downloadSampleTaskFile()" class="btn bg-gray-100 text-gray-700 hover:bg-gray-200" title="Download sample CSV template">
+              <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+              </svg>
+              Sample
+            </button>
             <label class="btn bg-blue-600 text-white hover:bg-blue-700 cursor-pointer">
               <svg class="w-4 h-4 mr-1 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
@@ -468,6 +474,35 @@ export class DashboardComponent implements OnInit, OnDestroy {
         }
       });
     }
+  }
+
+  downloadSampleTaskFile(): void {
+    const headers = ['title', 'description', 'status', 'due_date', 'assigned_to'];
+    const sampleRows = [
+      ['Setup project documentation', 'Create README and API docs', 'Pending', '2026-02-01', 'user@example.com'],
+      ['Design database schema', 'Define tables and relationships', 'In Progress', '2026-01-25', 'user@example.com'],
+      ['Implement user authentication', 'Add JWT auth and login/register', 'Completed', '2026-01-20', ''],
+      ['Build dashboard UI', 'Create main dashboard with stats', 'Pending', '2026-02-05', 'user@example.com'],
+      ['Write unit tests', 'Add tests for all services', 'In Progress', '', '']
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...sampleRows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sample_tasks_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.notificationService.info('Sample template downloaded. Fill it out and import.');
   }
 
   exportToCSV(): void {

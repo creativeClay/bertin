@@ -190,7 +190,18 @@ type TabType = 'members' | 'invites';
 
           <!-- Bulk Import Section -->
           <div class="border-t border-gray-200 pt-4 mt-4">
-            <h3 class="text-sm font-medium text-gray-700 mb-2">Or invite multiple users at once</h3>
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-sm font-medium text-gray-700">Or invite multiple users at once</h3>
+              <button
+                (click)="downloadSampleInviteFile()"
+                class="text-sm text-blue-600 hover:text-blue-800 flex items-center"
+              >
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+                Download Sample
+              </button>
+            </div>
             <div class="flex items-center gap-4">
               <label class="flex-1">
                 <div class="flex items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
@@ -448,6 +459,32 @@ export class TeamComponent implements OnInit {
     if (input.files && input.files.length > 0) {
       this.bulkInviteFile = input.files[0];
     }
+  }
+
+  downloadSampleInviteFile(): void {
+    const headers = ['email'];
+    const sampleEmails = [
+      'john.doe@example.com',
+      'jane.smith@example.com',
+      'bob.wilson@example.com',
+      'alice.johnson@example.com',
+      'charlie.brown@example.com'
+    ];
+
+    const csvContent = [headers.join(','), ...sampleEmails].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'sample_invites_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    this.notificationService.info('Sample template downloaded. Add emails and import.');
   }
 
   sendBulkInvites(): void {
