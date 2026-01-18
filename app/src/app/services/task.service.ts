@@ -53,29 +53,18 @@ export class TaskService {
   }
 
   createTask(data: CreateTaskRequest): Observable<{ task: Task }> {
-    return this.http.post<{ task: Task }>(this.apiUrl, data).pipe(
-      tap(response => {
-        this.tasksSignal.update(tasks => [response.task, ...tasks]);
-      })
-    );
+    // Don't add locally - Socket.IO will broadcast to all users including creator
+    return this.http.post<{ task: Task }>(this.apiUrl, data);
   }
 
   updateTask(id: number, data: UpdateTaskRequest): Observable<{ task: Task }> {
-    return this.http.put<{ task: Task }>(`${this.apiUrl}/${id}`, data).pipe(
-      tap(response => {
-        this.tasksSignal.update(tasks =>
-          tasks.map(t => t.id === id ? response.task : t)
-        );
-      })
-    );
+    // Don't update locally - Socket.IO will broadcast to all users
+    return this.http.put<{ task: Task }>(`${this.apiUrl}/${id}`, data);
   }
 
   deleteTask(id: number): Observable<{ message: string }> {
-    return this.http.delete<{ message: string }>(`${this.apiUrl}/${id}`).pipe(
-      tap(() => {
-        this.tasksSignal.update(tasks => tasks.filter(t => t.id !== id));
-      })
-    );
+    // Don't remove locally - Socket.IO will broadcast to all users
+    return this.http.delete<{ message: string }>(`${this.apiUrl}/${id}`);
   }
 
   updateTaskInList(task: Task): void {

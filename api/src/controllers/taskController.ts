@@ -1,7 +1,8 @@
 import { Response } from 'express';
-import { Task, User } from '../models';
+import { Task, User, Organization } from '../models';
 import { AuthRequest, TaskStatus } from '../types';
 import { getIO } from '../socket';
+import { sendTaskNotificationEmail } from '../services/emailService';
 
 export const createTask = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -45,6 +46,7 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
     // Emit real-time notification (scoped to org)
     const io = getIO();
     if (assigned_to) {
+      // Socket.IO notification (in-app)
       io.to(`user_${assigned_to}`).emit('notification', {
         type: 'task_created',
         taskId: task.id,
@@ -52,6 +54,24 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
         message: `New task assigned to you: ${task.title}`,
         userId: assigned_to
       });
+
+      // Email notification
+      const assignee = await User.findByPk(assigned_to);
+      const creator = await User.findByPk(created_by);
+      const organization = await Organization.findByPk(org_id);
+
+      if (assignee?.email) {
+        sendTaskNotificationEmail('task_created', {
+          recipientEmail: assignee.email,
+          recipientName: assignee.username,
+          taskTitle: task.title,
+          taskDescription: task.description || undefined,
+          taskStatus: task.status,
+          taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+          assignerName: creator?.username,
+          organizationName: organization?.name
+        });
+      }
     }
     io.to(`org_${org_id}`).emit('task_update', { action: 'created', task: taskWithAssociations });
 
@@ -156,9 +176,12 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
 
     // Emit real-time notifications
     const io = getIO();
+    const currentUser = req.user!;
+    const organization = await Organization.findByPk(org_id);
 
     // Notify if status changed
     if (status && status !== previousStatus && task.assigned_to) {
+      // Socket.IO notification (in-app)
       io.to(`user_${task.assigned_to}`).emit('notification', {
         type: 'task_updated',
         taskId: task.id,
@@ -166,10 +189,26 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         message: `Task "${task.title}" status changed to ${status}`,
         userId: task.assigned_to
       });
+
+      // Email notification
+      const assignee = await User.findByPk(task.assigned_to);
+      if (assignee?.email) {
+        sendTaskNotificationEmail('task_updated', {
+          recipientEmail: assignee.email,
+          recipientName: assignee.username,
+          taskTitle: task.title,
+          taskDescription: task.description || undefined,
+          taskStatus: task.status,
+          taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+          assignerName: currentUser.username,
+          organizationName: organization?.name
+        });
+      }
     }
 
     // Notify if assigned to new user
     if (assigned_to && assigned_to !== previousAssignee) {
+      // Socket.IO notification (in-app)
       io.to(`user_${assigned_to}`).emit('notification', {
         type: 'task_assigned',
         taskId: task.id,
@@ -177,6 +216,21 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         message: `You have been assigned to task: ${task.title}`,
         userId: assigned_to
       });
+
+      // Email notification
+      const newAssignee = await User.findByPk(assigned_to);
+      if (newAssignee?.email) {
+        sendTaskNotificationEmail('task_assigned', {
+          recipientEmail: newAssignee.email,
+          recipientName: newAssignee.username,
+          taskTitle: task.title,
+          taskDescription: task.description || undefined,
+          taskStatus: task.status,
+          taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+          assignerName: currentUser.username,
+          organizationName: organization?.name
+        });
+      }
     }
 
     io.to(`org_${org_id}`).emit('task_update', { action: 'updated', task: updatedTask });
@@ -202,13 +256,24 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
 
     const taskId = task.id;
     const taskTitle = task.title;
+    const taskDescription = task.description;
     const assignedTo = task.assigned_to;
+    const currentUser = req.user!;
+
+    // Get assignee info before deleting
+    let assignee: User | null = null;
+    let organization: Organization | null = null;
+    if (assignedTo) {
+      assignee = await User.findByPk(assignedTo);
+      organization = await Organization.findByPk(org_id);
+    }
 
     await task.destroy();
 
     // Emit real-time notification
     const io = getIO();
     if (assignedTo) {
+      // Socket.IO notification (in-app)
       io.to(`user_${assignedTo}`).emit('notification', {
         type: 'task_deleted',
         taskId,
@@ -216,6 +281,18 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
         message: `Task "${taskTitle}" has been deleted`,
         userId: assignedTo
       });
+
+      // Email notification
+      if (assignee?.email) {
+        sendTaskNotificationEmail('task_deleted', {
+          recipientEmail: assignee.email,
+          recipientName: assignee.username,
+          taskTitle: taskTitle,
+          taskDescription: taskDescription || undefined,
+          assignerName: currentUser.username,
+          organizationName: organization?.name
+        });
+      }
     }
     io.to(`org_${org_id}`).emit('task_update', { action: 'deleted', taskId });
 
