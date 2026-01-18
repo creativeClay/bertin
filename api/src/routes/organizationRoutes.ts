@@ -9,7 +9,8 @@ import {
 import {
   createInvite,
   getInvites,
-  cancelInvite
+  cancelInvite,
+  resendInvite
 } from '../controllers/inviteController';
 import { authenticate } from '../middleware/auth';
 
@@ -28,6 +29,7 @@ router.put('/members/:memberId/role', updateMemberRole);
 // Invite routes (under organization)
 router.post('/invites', createInvite);
 router.get('/invites', getInvites);
+router.post('/invites/:id/resend', resendInvite);
 router.delete('/invites/:id', cancelInvite);
 
 export default router;

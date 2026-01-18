@@ -57,12 +57,20 @@ import { User, Invite } from '../../models';
                       · Expires {{ invite.expires_at | date:'mediumDate' }}
                     </p>
                   </div>
-                  <button
-                    (click)="cancelInvite(invite)"
-                    class="text-red-600 hover:text-red-800 text-sm"
-                  >
-                    Cancel
-                  </button>
+                  <div class="flex gap-3">
+                    <button
+                      (click)="resendInvite(invite)"
+                      class="text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      Resend
+                    </button>
+                    <button
+                      (click)="cancelInvite(invite)"
+                      class="text-red-600 hover:text-red-800 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
               }
             }
@@ -191,6 +199,16 @@ export class TeamComponent implements OnInit {
         error: (err) => this.notificationService.error(err.error?.error || 'Failed to cancel invite')
       });
     }
+  }
+
+  resendInvite(invite: Invite): void {
+    this.organizationService.resendInvite(invite.id).subscribe({
+      next: () => {
+        this.notificationService.success('Invite resent successfully');
+        this.organizationService.loadInvites().subscribe();
+      },
+      error: (err) => this.notificationService.error(err.error?.error || 'Failed to resend invite')
+    });
   }
 
   updateRole(member: User, role: 'admin' | 'member'): void {

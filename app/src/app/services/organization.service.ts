@@ -85,6 +85,10 @@ export class OrganizationService {
     );
   }
 
+  resendInvite(inviteId: number): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>(`${this.apiUrl}/invites/${inviteId}/resend`, {});
+  }
+
   // Public endpoints (no auth required)
   getInviteByToken(token: string): Observable<{ invite: Invite }> {
     return this.http.get<{ invite: Invite }>(`${this.inviteApiUrl}/${token}`);

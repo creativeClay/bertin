@@ -262,6 +262,63 @@ export const acceptInvite = async (req: Request, res: Response): Promise<void> =
   }
 };
 
+export const resendInvite = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const orgId = req.user!.org_id;
+
+    if (!orgId) {
+      res.status(400).json({ error: 'No organization found' });
+      return;
+    }
+
+    if (req.user!.role !== 'admin') {
+      res.status(403).json({ error: 'Only admins can resend invites' });
+      return;
+    }
+
+    const invite = await Invite.findOne({
+      where: { id, org_id: orgId }
+    });
+
+    if (!invite) {
+      res.status(404).json({ error: 'Invite not found' });
+      return;
+    }
+
+    if (invite.accepted) {
+      res.status(400).json({ error: 'Invite has already been accepted' });
+      return;
+    }
+
+    // Update expiry date (extend by 7 days from now)
+    const newExpiresAt = new Date();
+    newExpiresAt.setDate(newExpiresAt.getDate() + 7);
+    invite.expires_at = newExpiresAt;
+    await invite.save();
+
+    // Resend email
+    const organization = await Organization.findByPk(orgId);
+    const inviter = await User.findByPk(req.user!.id);
+
+    try {
+      await sendInviteEmail(
+        invite.email,
+        invite.token,
+        organization?.name || 'Organization',
+        inviter?.username || 'Admin'
+      );
+    } catch (emailError) {
+      console.error('Failed to resend invite email:', emailError);
+    }
+
+    res.json({ message: 'Invite resent successfully' });
+  } catch (error) {
+    console.error('Resend invite error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 export const cancelInvite = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
