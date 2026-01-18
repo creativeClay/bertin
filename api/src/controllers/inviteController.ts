@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Invite, Organization, User } from '../models';
 import { AuthRequest } from '../types';
 import { generateToken } from '../middleware/auth';
+import { sendInviteEmail } from '../services/emailService';
 
 export const createInvite = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -66,6 +67,22 @@ export const createInvite = async (req: AuthRequest, res: Response): Promise<voi
         { model: User, as: 'inviter', attributes: ['id', 'username'] }
       ]
     });
+
+    // Send invite email
+    const organization = await Organization.findByPk(orgId);
+    const inviter = await User.findByPk(invitedBy);
+
+    try {
+      await sendInviteEmail(
+        email,
+        invite.token,
+        organization?.name || 'Organization',
+        inviter?.username || 'Admin'
+      );
+    } catch (emailError) {
+      console.error('Failed to send invite email:', emailError);
+      // Continue even if email fails - invite is still created
+    }
 
     res.status(201).json({
       message: 'Invite sent successfully',
