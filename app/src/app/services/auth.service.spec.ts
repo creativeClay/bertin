@@ -10,6 +10,10 @@ describe('AuthService', () => {
   let routerSpy: jest.Mocked<Router>;
 
   beforeEach(() => {
+    // Clear localStorage and reset all mocks BEFORE creating the service to prevent verifyToken from firing
+    localStorage.clear();
+    jest.resetAllMocks();
+
     routerSpy = {
       navigate: jest.fn()
     } as any;
@@ -24,10 +28,6 @@ describe('AuthService', () => {
 
     service = TestBed.inject(AuthService);
     httpMock = TestBed.inject(HttpTestingController);
-
-    // Clear localStorage before each test
-    localStorage.clear();
-    jest.clearAllMocks();
   });
 
   afterEach(() => {

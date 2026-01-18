@@ -1,0 +1,8 @@
+title,description,status,due_date,assigned_to
+Setup project documentation,Create README and API docs,Pending,2026-02-01,bertin.m2001@gmail.com
+Design database schema,Define tables and relationships,In Progress,2026-01-25,bertin.m2001@gmail.com
+Implement user authentication,Add JWT auth and login/register,Completed,2026-01-20,bertin.m2001@gmail.com
+Build dashboard UI,Create main dashboard with stats,Pending,2026-02-05,bertin.m2001@gmail.com
+Add email notifications,Setup email service for alerts,Pending,2026-02-10,bertin.m2001@gmail.com
+Write unit tests,Add tests for all services,In Progress,2026-01-30,bertin.m2001@gmail.com
+Deploy to production,Setup CI/CD and deploy,Pending,2026-02-15,bertin.m2001@gmail.com
