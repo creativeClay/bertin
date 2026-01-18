@@ -8,6 +8,7 @@ import authRoutes from './routes/authRoutes';
 import taskRoutes from './routes/taskRoutes';
 import organizationRoutes from './routes/organizationRoutes';
 import inviteRoutes from './routes/inviteRoutes';
+import notificationRoutes from './routes/notificationRoutes';
 import { initializeSocket } from './socket';
 
 // Load environment variables
@@ -32,6 +33,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/organization', organizationRoutes);
 app.use('/api/invites', inviteRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

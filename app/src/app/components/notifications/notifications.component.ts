@@ -2,15 +2,8 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { NavbarComponent } from '../navbar/navbar.component';
-import { SocketService } from '../../services';
-
-interface AppNotification {
-  id: number;
-  type: 'task_created' | 'task_updated' | 'task_deleted' | 'task_assigned' | 'info';
-  message: string;
-  timestamp: Date;
-  read: boolean;
-}
+import { AppNotificationService, SocketService, NotificationService } from '../../services';
+import { Notification, NotificationType } from '../../models';
 
 @Component({
   selector: 'app-notifications',
@@ -25,7 +18,7 @@ interface AppNotification {
           <h1 class="text-2xl font-bold text-gray-800">Notifications</h1>
           <p class="text-gray-600">Stay updated with your task activities</p>
         </div>
-        @if (notifications.length > 0) {
+        @if (appNotificationService.notifications().length > 0) {
           <div class="flex gap-2">
             <button
               (click)="markAllAsRead()"
@@ -44,7 +37,12 @@ interface AppNotification {
       </div>
 
       <div class="card">
-        @if (notifications.length === 0) {
+        @if (appNotificationService.loading()) {
+          <div class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
+            <p class="mt-2 text-gray-600">Loading notifications...</p>
+          </div>
+        } @else if (appNotificationService.notifications().length === 0) {
           <div class="text-center py-12">
             <svg class="w-16 h-16 mx-auto text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
@@ -54,7 +52,7 @@ interface AppNotification {
           </div>
         } @else {
           <div class="divide-y divide-gray-200">
-            @for (notification of notifications; track notification.id) {
+            @for (notification of appNotificationService.notifications(); track notification.id) {
               <div
                 class="p-4 hover:bg-gray-50 transition-colors"
                 [class.bg-blue-50]="!notification.read"
@@ -82,6 +80,11 @@ interface AppNotification {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                         </svg>
                       }
+                      @case ('task_due_soon') {
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                      }
                       @default {
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -90,12 +93,21 @@ interface AppNotification {
                     }
                   </div>
                   <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-700">{{ notification.title }}</p>
                     <p class="text-gray-900" [class.font-medium]="!notification.read">
                       {{ notification.message }}
                     </p>
-                    <p class="text-sm text-gray-500 mt-1">
-                      {{ notification.timestamp | date:'medium' }}
-                    </p>
+                    <div class="flex items-center gap-2 mt-1">
+                      <p class="text-sm text-gray-500">
+                        {{ notification.createdAt | date:'medium' }}
+                      </p>
+                      @if (notification.actor) {
+                        <span class="text-sm text-gray-400">•</span>
+                        <p class="text-sm text-gray-500">
+                          by {{ notification.actor.username }}
+                        </p>
+                      }
+                    </div>
                   </div>
                   <div class="flex items-center gap-2">
                     @if (!notification.read) {
@@ -125,11 +137,13 @@ interface AppNotification {
   `
 })
 export class NotificationsComponent implements OnInit, OnDestroy {
-  notifications: AppNotification[] = [];
-  private notificationId = 0;
   private subscriptions: Subscription[] = [];
 
-  constructor(private socketService: SocketService) {}
+  constructor(
+    public appNotificationService: AppNotificationService,
+    private socketService: SocketService,
+    private notificationService: NotificationService
+  ) {}
 
   ngOnInit(): void {
     this.loadNotifications();
@@ -142,61 +156,65 @@ export class NotificationsComponent implements OnInit, OnDestroy {
   }
 
   loadNotifications(): void {
-    // Load from localStorage
-    const saved = localStorage.getItem('app_notifications');
-    if (saved) {
-      this.notifications = JSON.parse(saved).map((n: any) => ({
-        ...n,
-        timestamp: new Date(n.timestamp)
-      }));
-      this.notificationId = Math.max(...this.notifications.map(n => n.id), 0);
-    }
-  }
-
-  saveNotifications(): void {
-    localStorage.setItem('app_notifications', JSON.stringify(this.notifications));
+    this.appNotificationService.loadNotifications().subscribe({
+      error: (err) => {
+        this.notificationService.error('Failed to load notifications');
+        console.error('Load notifications error:', err);
+      }
+    });
   }
 
   setupSocketListeners(): void {
-    const sub = this.socketService.notifications$.subscribe(notification => {
-      this.addNotification(notification.type || 'info', notification.message);
+    const sub = this.socketService.notifications$.subscribe(data => {
+      // When a new notification arrives via Socket.IO, add it to the list
+      if (data.notification) {
+        this.appNotificationService.addNotification(data.notification);
+      }
     });
     this.subscriptions.push(sub);
   }
 
-  addNotification(type: AppNotification['type'], message: string): void {
-    this.notificationId++;
-    this.notifications.unshift({
-      id: this.notificationId,
-      type,
-      message,
-      timestamp: new Date(),
-      read: false
+  markAsRead(notification: Notification): void {
+    this.appNotificationService.markAsRead(notification.id).subscribe({
+      error: (err) => {
+        this.notificationService.error('Failed to mark notification as read');
+        console.error('Mark as read error:', err);
+      }
     });
-    this.saveNotifications();
-  }
-
-  markAsRead(notification: AppNotification): void {
-    notification.read = true;
-    this.saveNotifications();
   }
 
   markAllAsRead(): void {
-    this.notifications.forEach(n => n.read = true);
-    this.saveNotifications();
+    this.appNotificationService.markAllAsRead().subscribe({
+      next: () => this.notificationService.success('All notifications marked as read'),
+      error: (err) => {
+        this.notificationService.error('Failed to mark all as read');
+        console.error('Mark all as read error:', err);
+      }
+    });
   }
 
-  removeNotification(notification: AppNotification): void {
-    this.notifications = this.notifications.filter(n => n.id !== notification.id);
-    this.saveNotifications();
+  removeNotification(notification: Notification): void {
+    this.appNotificationService.deleteNotification(notification.id).subscribe({
+      error: (err) => {
+        this.notificationService.error('Failed to delete notification');
+        console.error('Delete notification error:', err);
+      }
+    });
   }
 
   clearAll(): void {
-    this.notifications = [];
-    this.saveNotifications();
+    if (confirm('Are you sure you want to clear all notifications?')) {
+      this.appNotificationService.clearAll().subscribe({
+        next: () => this.notificationService.success('All notifications cleared'),
+        error: (err) => {
+          this.notificationService.error('Failed to clear notifications');
+          console.error('Clear all error:', err);
+        }
+      });
+    }
   }
 
-  getIconClass(type: AppNotification['type']): string {
+  getIconClass(type: NotificationType): string {
     const base = 'w-10 h-10 rounded-full flex items-center justify-center';
     switch (type) {
       case 'task_created':
@@ -207,6 +225,8 @@ export class NotificationsComponent implements OnInit, OnDestroy {
         return `${base} bg-red-100 text-red-600`;
       case 'task_assigned':
         return `${base} bg-purple-100 text-purple-600`;
+      case 'task_due_soon':
+        return `${base} bg-yellow-100 text-yellow-600`;
       default:
         return `${base} bg-gray-100 text-gray-600`;
     }

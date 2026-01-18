@@ -41,8 +41,9 @@ export interface UpdateTaskRequest {
 
 export interface TaskNotification {
   type: 'task_created' | 'task_updated' | 'task_deleted' | 'task_assigned';
-  taskId: number;
-  taskTitle: string;
+  taskId?: number;
+  taskTitle?: string;
   message: string;
-  userId: number;
+  userId?: number;
+  notification?: import('./notification.model').Notification;
 }

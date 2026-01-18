@@ -3,6 +3,7 @@ import { Task, User, Organization } from '../models';
 import { AuthRequest, TaskStatus } from '../types';
 import { getIO } from '../socket';
 import { sendTaskNotificationEmail } from '../services/emailService';
+import { createNotification } from './notificationController';
 
 export const createTask = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -43,23 +44,28 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       ]
     });
 
-    // Emit real-time notification (scoped to org)
+    // Emit real-time update to organization
     const io = getIO();
-    if (assigned_to) {
-      // Socket.IO notification (in-app)
-      io.to(`user_${assigned_to}`).emit('notification', {
-        type: 'task_created',
-        taskId: task.id,
-        taskTitle: task.title,
-        message: `New task assigned to you: ${task.title}`,
-        userId: assigned_to
-      });
+    io.to(`org_${org_id}`).emit('task_update', { action: 'created', task: taskWithAssociations });
 
-      // Email notification
+    // Create notification and send email if task is assigned
+    if (assigned_to) {
       const assignee = await User.findByPk(assigned_to);
       const creator = await User.findByPk(created_by);
       const organization = await Organization.findByPk(org_id);
 
+      // Save notification to database (also sends Socket.IO notification)
+      await createNotification(
+        assigned_to,
+        org_id,
+        'task_created',
+        'New Task Assigned',
+        `New task assigned to you: ${task.title}`,
+        task.id,
+        created_by
+      );
+
+      // Email notification
       if (assignee?.email) {
         sendTaskNotificationEmail('task_created', {
           recipientEmail: assignee.email,
@@ -73,7 +79,6 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
         });
       }
     }
-    io.to(`org_${org_id}`).emit('task_update', { action: 'created', task: taskWithAssociations });
 
     res.status(201).json({ task: taskWithAssociations });
   } catch (error) {
@@ -174,21 +179,25 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
       ]
     });
 
-    // Emit real-time notifications
+    // Emit real-time update to organization
     const io = getIO();
+    io.to(`org_${org_id}`).emit('task_update', { action: 'updated', task: updatedTask });
+
     const currentUser = req.user!;
     const organization = await Organization.findByPk(org_id);
 
     // Notify if status changed
     if (status && status !== previousStatus && task.assigned_to) {
-      // Socket.IO notification (in-app)
-      io.to(`user_${task.assigned_to}`).emit('notification', {
-        type: 'task_updated',
-        taskId: task.id,
-        taskTitle: task.title,
-        message: `Task "${task.title}" status changed to ${status}`,
-        userId: task.assigned_to
-      });
+      // Save notification to database (also sends Socket.IO notification)
+      await createNotification(
+        task.assigned_to,
+        org_id,
+        'task_updated',
+        'Task Updated',
+        `Task "${task.title}" status changed to ${status}`,
+        task.id,
+        currentUser.id
+      );
 
       // Email notification
       const assignee = await User.findByPk(task.assigned_to);
@@ -208,14 +217,16 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
 
     // Notify if assigned to new user
     if (assigned_to && assigned_to !== previousAssignee) {
-      // Socket.IO notification (in-app)
-      io.to(`user_${assigned_to}`).emit('notification', {
-        type: 'task_assigned',
-        taskId: task.id,
-        taskTitle: task.title,
-        message: `You have been assigned to task: ${task.title}`,
-        userId: assigned_to
-      });
+      // Save notification to database (also sends Socket.IO notification)
+      await createNotification(
+        assigned_to,
+        org_id,
+        'task_assigned',
+        'Task Assigned',
+        `You have been assigned to task: ${task.title}`,
+        task.id,
+        currentUser.id
+      );
 
       // Email notification
       const newAssignee = await User.findByPk(assigned_to);
@@ -232,8 +243,6 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
         });
       }
     }
-
-    io.to(`org_${org_id}`).emit('task_update', { action: 'updated', task: updatedTask });
 
     res.json({ task: updatedTask });
   } catch (error) {
@@ -268,19 +277,18 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
       organization = await Organization.findByPk(org_id);
     }
 
-    await task.destroy();
-
-    // Emit real-time notification
-    const io = getIO();
+    // Create notification before deleting task (task_id will be null after deletion)
     if (assignedTo) {
-      // Socket.IO notification (in-app)
-      io.to(`user_${assignedTo}`).emit('notification', {
-        type: 'task_deleted',
-        taskId,
-        taskTitle,
-        message: `Task "${taskTitle}" has been deleted`,
-        userId: assignedTo
-      });
+      // Save notification to database (also sends Socket.IO notification)
+      await createNotification(
+        assignedTo,
+        org_id,
+        'task_deleted',
+        'Task Deleted',
+        `Task "${taskTitle}" has been deleted`,
+        null, // task_id is null since task is being deleted
+        currentUser.id
+      );
 
       // Email notification
       if (assignee?.email) {
@@ -294,6 +302,11 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
         });
       }
     }
+
+    await task.destroy();
+
+    // Emit real-time update to organization
+    const io = getIO();
     io.to(`org_${org_id}`).emit('task_update', { action: 'deleted', taskId });
 
     res.json({ message: 'Task deleted successfully' });
