@@ -122,22 +122,50 @@ volumes:
 
 #### Quick Start (Docker)
 
+**1. Clone the repository:**
 ```bash
-# Clone the repository
 git clone https://github.com/creativeClay/bertin.git
 cd bertin
+```
 
-# Start all services
+**2. Create a `.env` file in the root folder:**
+```bash
+# Database Configuration
+DB_HOST=db
+DB_NAME=taskdb
+DB_USER=user
+DB_PASSWORD=password
+
+# JWT Secret
+JWT_SECRET=your-secret-key-change-in-production
+
+# App Configuration
+NODE_ENV=development
+PORT=3000
+FRONTEND_URL=http://localhost:4200
+APP_NAME=Task Manager
+
+# Email Configuration (Optional - for email notifications)
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-gmail-app-password
+```
+
+**3. Start all services:**
+```bash
 docker compose up --build -d
+```
 
-# View logs (optional)
+**4. View logs (optional):**
+```bash
 docker compose logs -f
 ```
 
 The application will be available at:
-- **Frontend**: http://localhost:4200
-- **API**: http://localhost:3000
-- **Database**: localhost:5433
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:4200 |
+| API | http://localhost:3000 |
+| Database | localhost:5433 |
 
 #### Stop the Application
 
@@ -148,6 +176,14 @@ docker compose down
 # Stop and remove all data
 docker compose down -v
 ```
+
+#### Rebuild After Code Changes
+
+```bash
+docker compose up --build -d
+```
+
+---
 
 #### Development Setup (Without Docker)
 
