@@ -53,23 +53,31 @@ export const createTestTask = async (orgId: number, creatorId: number, overrides
   title: string;
   description: string;
   status: 'Pending' | 'In Progress' | 'Completed';
-  assigned_to: number | null;
+  assigned_to: number | number[] | null;
   due_date: Date | null;
 }> = {}) => {
+  const { assigned_to, ...restOverrides } = overrides;
   const defaults = {
     title: 'Test Task',
     description: 'Test description',
     status: 'Pending' as const,
-    assigned_to: null,
     due_date: null
   };
 
-  return Task.create({
+  const task = await Task.create({
     ...defaults,
-    ...overrides,
+    ...restOverrides,
     org_id: orgId,
     created_by: creatorId
   });
+
+  // Handle assignees via junction table
+  if (assigned_to) {
+    const assigneeIds = Array.isArray(assigned_to) ? assigned_to : [assigned_to];
+    await task.setAssignees(assigneeIds);
+  }
+
+  return task;
 };
 
 export const createTestInvite = async (orgId: number, invitedBy: number, email?: string) => {

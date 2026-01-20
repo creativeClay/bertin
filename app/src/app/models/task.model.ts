@@ -8,9 +8,8 @@ export interface Task {
   description: string | null;
   status: TaskStatus;
   due_date: string | null;
-  assigned_to: number | null;
   created_by: number;
-  assignee?: User | null;
+  assignees?: User[];
   creator?: User;
   createdAt: string;
   updatedAt: string;
@@ -28,7 +27,7 @@ export interface CreateTaskRequest {
   description?: string;
   status?: TaskStatus;
   due_date?: string;
-  assigned_to?: number;
+  assigned_to?: number[];
 }
 
 export interface UpdateTaskRequest {
@@ -36,7 +35,7 @@ export interface UpdateTaskRequest {
   description?: string;
   status?: TaskStatus;
   due_date?: string;
-  assigned_to?: number;
+  assigned_to?: number[];
 }
 
 export interface TaskNotification {

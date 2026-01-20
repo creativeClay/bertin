@@ -26,6 +26,28 @@ describe('Task Controller', () => {
       expect(response.body.task.created_by).toBe(admin.id);
     });
 
+    it('should create a task with multiple assignees', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member1 = await createTestUser({ org_id: org.id });
+      const member2 = await createTestUser({ org_id: org.id });
+      const token = getAuthToken(admin);
+
+      const response = await request(app)
+        .post('/api/tasks')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Multi-Assignee Task',
+          description: 'Task with multiple assignees',
+          status: 'Pending',
+          assigned_to: [member1.id, member2.id]
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.task).toBeDefined();
+      expect(response.body.task.assignees).toHaveLength(2);
+      expect(response.body.task.assignees.map((a: any) => a.id).sort()).toEqual([member1.id, member2.id].sort());
+    });
+
     it('should fail without title', async () => {
       const { admin } = await createTestAdmin();
       const token = getAuthToken(admin);
@@ -75,11 +97,11 @@ describe('Task Controller', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           title: 'New Task',
-          assigned_to: otherUser.id
+          assigned_to: [otherUser.id]
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('member of your organization');
+      expect(response.body.error).toContain('member');
     });
   });
 
@@ -126,7 +148,7 @@ describe('Task Controller', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.tasks).toHaveLength(1);
-      expect(response.body.tasks[0].assigned_to).toBe(member.id);
+      expect(response.body.tasks[0].assignees.some((a: any) => a.id === member.id)).toBe(true);
     });
 
     it('should not return tasks from other organizations', async () => {
@@ -203,6 +225,24 @@ describe('Task Controller', () => {
       expect(response.status).toBe(200);
       expect(response.body.task.title).toBe('Updated Title');
       expect(response.body.task.status).toBe('In Progress');
+    });
+
+    it('should update task assignees', async () => {
+      const { admin, org } = await createTestAdmin();
+      const member1 = await createTestUser({ org_id: org.id });
+      const member2 = await createTestUser({ org_id: org.id });
+      const task = await createTestTask(org.id, admin.id, { title: 'Test Task', assigned_to: member1.id });
+      const token = getAuthToken(admin);
+
+      const response = await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          assigned_to: [member1.id, member2.id]
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.task.assignees).toHaveLength(2);
     });
 
     it('should return 404 for non-existent task', async () => {
@@ -286,7 +326,7 @@ describe('Task Controller', () => {
       await clearNotifications();
     });
 
-    it('should notify assignee when task status is changed by another user', async () => {
+    it('should notify assignees when task status is changed by another user', async () => {
       const { admin, org } = await createTestAdmin();
       const member = await createTestUser({ org_id: org.id, role: 'member' });
       const task = await createTestTask(org.id, admin.id, {
@@ -339,11 +379,11 @@ describe('Task Controller', () => {
       await request(app)
         .put(`/api/tasks/${task.id}`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ assigned_to: member2.id });
+        .send({ assigned_to: [member2.id] });
 
       const notifications = await getNotificationsForUser(member1.id);
       expect(notifications.length).toBeGreaterThanOrEqual(1);
-      expect(notifications.some(n => n.type === 'task_updated' && n.message.includes('reassigned'))).toBe(true);
+      expect(notifications.some(n => n.type === 'task_updated' && n.message.includes('unassigned'))).toBe(true);
     });
 
     it('should notify new assignee when task is assigned', async () => {
@@ -355,16 +395,17 @@ describe('Task Controller', () => {
       await request(app)
         .put(`/api/tasks/${task.id}`)
         .set('Authorization', `Bearer ${token}`)
-        .send({ assigned_to: member.id });
+        .send({ assigned_to: [member.id] });
 
       const notifications = await getNotificationsForUser(member.id);
       expect(notifications.length).toBeGreaterThanOrEqual(1);
       expect(notifications.some(n => n.type === 'task_assigned')).toBe(true);
     });
 
-    it('should notify assignee when task is created with assignment', async () => {
+    it('should notify all assignees when task is created with multiple assignments', async () => {
       const { admin, org } = await createTestAdmin();
-      const member = await createTestUser({ org_id: org.id, role: 'member' });
+      const member1 = await createTestUser({ org_id: org.id, role: 'member' });
+      const member2 = await createTestUser({ org_id: org.id, role: 'member' });
       const token = getAuthToken(admin);
 
       await request(app)
@@ -372,12 +413,14 @@ describe('Task Controller', () => {
         .set('Authorization', `Bearer ${token}`)
         .send({
           title: 'New Task',
-          assigned_to: member.id
+          assigned_to: [member1.id, member2.id]
         });
 
-      const notifications = await getNotificationsForUser(member.id);
-      expect(notifications.length).toBeGreaterThanOrEqual(1);
-      expect(notifications.some(n => n.type === 'task_created')).toBe(true);
+      const notifications1 = await getNotificationsForUser(member1.id);
+      const notifications2 = await getNotificationsForUser(member2.id);
+
+      expect(notifications1.some(n => n.type === 'task_created')).toBe(true);
+      expect(notifications2.some(n => n.type === 'task_created')).toBe(true);
     });
 
     it('should not notify user when they make the change themselves', async () => {

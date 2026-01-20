@@ -292,9 +292,18 @@ import { TaskModalComponent } from '../task-modal/task-modal.component';
                 <div>
                   <h3 class="text-sm font-medium text-gray-500 uppercase">Assigned To</h3>
                   <div class="mt-1">
-                    @if (viewTask.assignee) {
-                      <p class="text-gray-900 font-medium">{{ getAssigneeName(viewTask) }}</p>
-                      <p class="text-sm text-gray-500">{{ viewTask.assignee.email }}</p>
+                    @if (viewTask.assignees && viewTask.assignees.length > 0) {
+                      @for (assignee of viewTask.assignees; track assignee.id) {
+                        <div class="flex items-center space-x-2 py-1">
+                          <div class="w-6 h-6 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                            {{ assignee.first_name?.charAt(0) }}{{ assignee.last_name?.charAt(0) }}
+                          </div>
+                          <div>
+                            <p class="text-gray-900 text-sm font-medium">{{ assignee.full_name || assignee.first_name + ' ' + assignee.last_name }}</p>
+                            <p class="text-xs text-gray-500">{{ assignee.email }}</p>
+                          </div>
+                        </div>
+                      }
                     } @else {
                       <p class="text-gray-500">Unassigned</p>
                     }
@@ -480,9 +489,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const headers = ['title', 'description', 'status', 'due_date', 'assigned_to'];
     const sampleRows = [
       ['Setup project documentation', 'Create README and API docs', 'Pending', '2026-02-01', 'user@example.com'],
-      ['Design database schema', 'Define tables and relationships', 'In Progress', '2026-01-25', 'user@example.com'],
+      ['Design database schema', 'Define tables and relationships', 'In Progress', '2026-01-25', 'user1@example.com;user2@example.com'],
       ['Implement user authentication', 'Add JWT auth and login/register', 'Completed', '2026-01-20', ''],
-      ['Build dashboard UI', 'Create main dashboard with stats', 'Pending', '2026-02-05', 'user@example.com'],
+      ['Build dashboard UI', 'Create main dashboard with stats', 'Pending', '2026-02-05', 'user@example.com;admin@example.com'],
       ['Write unit tests', 'Add tests for all services', 'In Progress', '', '']
     ];
 
@@ -509,13 +518,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const tasks = this.taskService.tasks();
     if (tasks.length === 0) return;
 
-    const headers = ['ID', 'Title', 'Description', 'Status', 'Assigned To', 'Due Date', 'Created By', 'Created At', 'Updated At'];
+    const headers = ['ID', 'Title', 'Description', 'Status', 'Assigned To', 'Assigned To Emails', 'Due Date', 'Created By', 'Created At', 'Updated At'];
     const rows = tasks.map(task => [
       task.id,
       `"${task.title.replace(/"/g, '""')}"`,
       `"${(task.description || '').replace(/"/g, '""')}"`,
       task.status,
-      this.getAssigneeName(task),
+      `"${this.getAssigneeName(task)}"`,
+      `"${this.getAssigneeEmails(task)}"`,
       task.due_date ? new Date(task.due_date).toLocaleDateString() : '',
       this.getCreatorName(task),
       new Date(task.createdAt).toLocaleString(),
@@ -594,8 +604,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   getAssigneeName(task: Task): string {
-    if (!task.assignee) return 'Unassigned';
-    return task.assignee.full_name || `${task.assignee.first_name} ${task.assignee.last_name}`;
+    if (!task.assignees || task.assignees.length === 0) return 'Unassigned';
+    return task.assignees.map(a => a.full_name || `${a.first_name} ${a.last_name}`).join(', ');
+  }
+
+  getAssigneeEmails(task: Task): string {
+    if (!task.assignees || task.assignees.length === 0) return '';
+    return task.assignees.map(a => a.email).join(';');
   }
 
   getCreatorName(task: Task): string {

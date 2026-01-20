@@ -1,6 +1,7 @@
-import { DataTypes, Model, Optional } from 'sequelize';
+import { DataTypes, Model, Optional, BelongsToManyGetAssociationsMixin, BelongsToManySetAssociationsMixin, BelongsToManyAddAssociationsMixin, BelongsToManyRemoveAssociationsMixin } from 'sequelize';
 import sequelize from '../config/database';
 import { TaskStatus } from '../types';
+import User from './User';
 
 interface TaskAttributes {
   id: number;
@@ -8,14 +9,13 @@ interface TaskAttributes {
   description: string | null;
   status: TaskStatus;
   due_date: Date | null;
-  assigned_to: number | null;
   created_by: number;
   org_id: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
-interface TaskCreationAttributes extends Optional<TaskAttributes, 'id' | 'description' | 'status' | 'due_date' | 'assigned_to'> {}
+interface TaskCreationAttributes extends Optional<TaskAttributes, 'id' | 'description' | 'status' | 'due_date'> {}
 
 class Task extends Model<TaskAttributes, TaskCreationAttributes> implements TaskAttributes {
   public id!: number;
@@ -23,11 +23,19 @@ class Task extends Model<TaskAttributes, TaskCreationAttributes> implements Task
   public description!: string | null;
   public status!: TaskStatus;
   public due_date!: Date | null;
-  public assigned_to!: number | null;
   public created_by!: number;
   public org_id!: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+
+  // Assignees association methods (many-to-many)
+  public getAssignees!: BelongsToManyGetAssociationsMixin<User>;
+  public setAssignees!: BelongsToManySetAssociationsMixin<User, number>;
+  public addAssignees!: BelongsToManyAddAssociationsMixin<User, number>;
+  public removeAssignees!: BelongsToManyRemoveAssociationsMixin<User, number>;
+
+  // Virtual property populated by association
+  public assignees?: User[];
 }
 
 Task.init(
@@ -52,14 +60,6 @@ Task.init(
     due_date: {
       type: DataTypes.DATE,
       allowNull: true
-    },
-    assigned_to: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: 'users',
-        key: 'id'
-      }
     },
     created_by: {
       type: DataTypes.INTEGER,

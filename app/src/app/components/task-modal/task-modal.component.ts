@@ -68,13 +68,26 @@ import { Task, TaskStatus, User, CreateTaskRequest, UpdateTaskRequest } from '..
           </div>
 
           <div class="mb-6">
-            <label class="label" for="assigned_to">Assign To</label>
-            <select id="assigned_to" formControlName="assigned_to" class="input">
-              <option [ngValue]="null">Unassigned</option>
-              @for (user of users; track user.id) {
-                <option [ngValue]="user.id">{{ getUserDisplayName(user) }}</option>
+            <label class="label">Assign To</label>
+            <div class="border border-gray-300 rounded-md max-h-40 overflow-y-auto p-2 bg-white">
+              @if (users.length === 0) {
+                <p class="text-gray-500 text-sm py-2 text-center">No team members available</p>
               }
-            </select>
+              @for (user of users; track user.id) {
+                <label class="flex items-center py-1.5 px-2 hover:bg-gray-50 rounded cursor-pointer">
+                  <input
+                    type="checkbox"
+                    [checked]="isUserAssigned(user.id)"
+                    (change)="toggleAssignee(user.id, $event)"
+                    class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span class="ml-2 text-sm text-gray-700">{{ getUserDisplayName(user) }}</span>
+                </label>
+              }
+            </div>
+            @if (selectedAssignees.length > 0) {
+              <p class="text-xs text-gray-500 mt-1">{{ selectedAssignees.length }} user(s) selected</p>
+            }
           </div>
 
           <div class="flex justify-end space-x-3">
@@ -98,25 +111,48 @@ export class TaskModalComponent implements OnInit {
 
   form!: FormGroup;
   loading = false;
+  selectedAssignees: number[] = [];
 
   constructor(private fb: FormBuilder) {}
 
   ngOnInit(): void {
+    // Initialize selected assignees from existing task
+    if (this.task?.assignees) {
+      this.selectedAssignees = this.task.assignees.map(u => u.id);
+    }
+
     this.form = this.fb.group({
       title: [this.task?.title || '', Validators.required],
       description: [this.task?.description || ''],
       status: [this.task?.status || 'Pending'],
-      due_date: [this.task?.due_date ? this.formatDate(this.task.due_date) : ''],
-      assigned_to: [this.task?.assigned_to || null]
+      due_date: [this.task?.due_date ? this.formatDate(this.task.due_date) : '']
     });
+  }
+
+  isUserAssigned(userId: number): boolean {
+    return this.selectedAssignees.includes(userId);
+  }
+
+  toggleAssignee(userId: number, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    if (checked) {
+      if (!this.selectedAssignees.includes(userId)) {
+        this.selectedAssignees.push(userId);
+      }
+    } else {
+      this.selectedAssignees = this.selectedAssignees.filter(id => id !== userId);
+    }
   }
 
   onSubmit(): void {
     if (this.form.invalid) return;
 
-    const data = { ...this.form.value };
+    const data: CreateTaskRequest | UpdateTaskRequest = {
+      ...this.form.value,
+      assigned_to: this.selectedAssignees.length > 0 ? this.selectedAssignees : undefined
+    };
+
     if (!data.due_date) delete data.due_date;
-    if (data.assigned_to === null) delete data.assigned_to;
 
     this.save.emit(data);
   }

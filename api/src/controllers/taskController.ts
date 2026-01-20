@@ -1,10 +1,11 @@
 import { Response } from 'express';
-import { Task, User, Organization } from '../models';
+import { Task, User, Organization, TaskAssignee } from '../models';
 import { AuthRequest, TaskStatus } from '../types';
 import { getIO } from '../socket';
 import { sendTaskNotificationEmail } from '../services/emailService';
 import { createNotification } from './notificationController';
 import * as XLSX from 'xlsx';
+import { Op } from 'sequelize';
 
 export const createTask = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -17,13 +18,15 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       return;
     }
 
-    // Validate assigned_to is in same org
-    if (assigned_to) {
-      const assignee = await User.findOne({
-        where: { id: assigned_to, org_id }
+    // Validate assigned_to users are in same org (can be array or single value)
+    const assigneeIds: number[] = Array.isArray(assigned_to) ? assigned_to : (assigned_to ? [assigned_to] : []);
+
+    if (assigneeIds.length > 0) {
+      const validAssignees = await User.findAll({
+        where: { id: { [Op.in]: assigneeIds }, org_id }
       });
-      if (!assignee) {
-        res.status(400).json({ error: 'Assigned user must be a member of your organization' });
+      if (validAssignees.length !== assigneeIds.length) {
+        res.status(400).json({ error: 'All assigned users must be members of your organization' });
         return;
       }
     }
@@ -33,14 +36,18 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
       description,
       status: status || 'Pending',
       due_date,
-      assigned_to,
       created_by,
       org_id
     });
 
+    // Set assignees via junction table
+    if (assigneeIds.length > 0) {
+      await task.setAssignees(assigneeIds);
+    }
+
     const taskWithAssociations = await Task.findByPk(task.id, {
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'assignees', attributes: ['id', 'first_name', 'last_name', 'email'], through: { attributes: [] } },
         { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
@@ -49,35 +56,38 @@ export const createTask = async (req: AuthRequest, res: Response): Promise<void>
     const io = getIO();
     io.to(`org_${org_id}`).emit('task_update', { action: 'created', task: taskWithAssociations });
 
-    // Create notification and send email if task is assigned
-    if (assigned_to) {
-      const assignee = await User.findByPk(assigned_to);
+    // Create notifications and send emails to all assignees
+    if (assigneeIds.length > 0) {
       const creator = await User.findByPk(created_by);
       const organization = await Organization.findByPk(org_id);
 
-      // Save notification to database (also sends Socket.IO notification)
-      await createNotification(
-        assigned_to,
-        org_id,
-        'task_created',
-        'New Task Assigned',
-        `New task assigned to you: ${task.title}`,
-        task.id,
-        created_by
-      );
+      for (const assigneeId of assigneeIds) {
+        const assignee = await User.findByPk(assigneeId);
 
-      // Email notification
-      if (assignee?.email) {
-        sendTaskNotificationEmail('task_created', {
-          recipientEmail: assignee.email,
-          recipientName: assignee.full_name,
-          taskTitle: task.title,
-          taskDescription: task.description || undefined,
-          taskStatus: task.status,
-          taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-          assignerName: creator?.full_name,
-          organizationName: organization?.name
-        });
+        // Save notification to database (also sends Socket.IO notification)
+        await createNotification(
+          assigneeId,
+          org_id,
+          'task_created',
+          'New Task Assigned',
+          `New task assigned to you: ${task.title}`,
+          task.id,
+          created_by
+        );
+
+        // Email notification
+        if (assignee?.email) {
+          sendTaskNotificationEmail('task_created', {
+            recipientEmail: assignee.email,
+            recipientName: assignee.full_name,
+            taskTitle: task.title,
+            taskDescription: task.description || undefined,
+            taskStatus: task.status,
+            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+            assignerName: creator?.full_name,
+            organizationName: organization?.name
+          });
+        }
       }
     }
 
@@ -99,17 +109,38 @@ export const getTasks = async (req: AuthRequest, res: Response): Promise<void> =
 
     const where: any = { org_id };
     if (status) where.status = status as TaskStatus;
-    if (assigned_to) where.assigned_to = Number(assigned_to);
+
+    // Build include array
+    const include: any[] = [
+      { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
+    ];
+
+    // Handle assignee filter via junction table
+    if (assigned_to) {
+      include.push({
+        model: User,
+        as: 'assignees',
+        attributes: ['id', 'first_name', 'last_name', 'email'],
+        through: { attributes: [] },
+        where: { id: Number(assigned_to) },
+        required: true
+      });
+    } else {
+      include.push({
+        model: User,
+        as: 'assignees',
+        attributes: ['id', 'first_name', 'last_name', 'email'],
+        through: { attributes: [] }
+      });
+    }
 
     const { count, rows: tasks } = await Task.findAndCountAll({
       where,
-      include: [
-        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
-        { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
-      ],
+      include,
       order: [['createdAt', 'DESC']],
       limit: limitNum,
-      offset
+      offset,
+      distinct: true
     });
 
     const totalPages = Math.ceil(count / limitNum);
@@ -139,7 +170,7 @@ export const getTaskById = async (req: AuthRequest, res: Response): Promise<void
     const task = await Task.findOne({
       where: { id, org_id },
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'assignees', attributes: ['id', 'first_name', 'last_name', 'email'], through: { attributes: [] } },
         { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
@@ -162,38 +193,51 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
     const { title, description, status, due_date, assigned_to } = req.body;
     const org_id = req.user!.org_id!;
 
-    const task = await Task.findOne({ where: { id, org_id } });
+    const task = await Task.findOne({
+      where: { id, org_id },
+      include: [{ model: User, as: 'assignees', attributes: ['id', 'first_name', 'last_name', 'email'], through: { attributes: [] } }]
+    });
 
     if (!task) {
       res.status(404).json({ error: 'Task not found' });
       return;
     }
 
-    // Validate assigned_to is in same org
-    if (assigned_to) {
-      const assignee = await User.findOne({
-        where: { id: assigned_to, org_id }
+    // Get previous assignees
+    const previousAssignees = await task.getAssignees();
+    const previousAssigneeIds = previousAssignees.map(u => u.id);
+    const previousStatus = task.status;
+
+    // Validate new assignees if provided
+    const newAssigneeIds: number[] = assigned_to !== undefined
+      ? (Array.isArray(assigned_to) ? assigned_to : (assigned_to ? [assigned_to] : []))
+      : previousAssigneeIds;
+
+    if (assigned_to !== undefined && newAssigneeIds.length > 0) {
+      const validAssignees = await User.findAll({
+        where: { id: { [Op.in]: newAssigneeIds }, org_id }
       });
-      if (!assignee) {
-        res.status(400).json({ error: 'Assigned user must be a member of your organization' });
+      if (validAssignees.length !== newAssigneeIds.length) {
+        res.status(400).json({ error: 'All assigned users must be members of your organization' });
         return;
       }
     }
-
-    const previousAssignee = task.assigned_to;
-    const previousStatus = task.status;
 
     await task.update({
       title: title ?? task.title,
       description: description ?? task.description,
       status: status ?? task.status,
-      due_date: due_date ?? task.due_date,
-      assigned_to: assigned_to ?? task.assigned_to
+      due_date: due_date ?? task.due_date
     });
+
+    // Update assignees if provided
+    if (assigned_to !== undefined) {
+      await task.setAssignees(newAssigneeIds);
+    }
 
     const updatedTask = await Task.findByPk(id, {
       include: [
-        { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+        { model: User, as: 'assignees', attributes: ['id', 'first_name', 'last_name', 'email'], through: { attributes: [] } },
         { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
       ]
     });
@@ -206,38 +250,42 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
     const currentUser = await User.findByPk(currentUserId);
     const organization = await Organization.findByPk(org_id);
 
-    // Notify if status changed
-    if (status && status !== previousStatus && task.assigned_to) {
-      // Notify assignee (if not the one making the change)
-      if (task.assigned_to !== currentUserId) {
-        await createNotification(
-          task.assigned_to,
-          org_id,
-          'task_updated',
-          'Task Updated',
-          `Task "${task.title}" status changed to ${status}`,
-          task.id,
-          currentUserId
-        );
+    // Get final assignee IDs after update
+    const finalAssigneeIds = assigned_to !== undefined ? newAssigneeIds : previousAssigneeIds;
 
-        // Email notification to assignee
-        const assignee = await User.findByPk(task.assigned_to);
-        if (assignee?.email) {
-          sendTaskNotificationEmail('task_updated', {
-            recipientEmail: assignee.email,
-            recipientName: assignee.full_name,
-            taskTitle: task.title,
-            taskDescription: task.description || undefined,
-            taskStatus: task.status,
-            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-            assignerName: currentUser?.full_name,
-            organizationName: organization?.name
-          });
+    // Notify if status changed
+    if (status && status !== previousStatus) {
+      // Notify all assignees (except the one making the change)
+      for (const assigneeId of finalAssigneeIds) {
+        if (assigneeId !== currentUserId) {
+          await createNotification(
+            assigneeId,
+            org_id,
+            'task_updated',
+            'Task Updated',
+            `Task "${task.title}" status changed to ${status}`,
+            task.id,
+            currentUserId
+          );
+
+          const assignee = await User.findByPk(assigneeId);
+          if (assignee?.email) {
+            sendTaskNotificationEmail('task_updated', {
+              recipientEmail: assignee.email,
+              recipientName: assignee.full_name,
+              taskTitle: task.title,
+              taskDescription: task.description || undefined,
+              taskStatus: task.status,
+              taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+              assignerName: currentUser?.full_name,
+              organizationName: organization?.name
+            });
+          }
         }
       }
 
-      // Notify creator (if different from actor and assignee)
-      if (task.created_by !== currentUserId && task.created_by !== task.assigned_to) {
+      // Notify creator (if different from actor and not an assignee)
+      if (task.created_by !== currentUserId && !finalAssigneeIds.includes(task.created_by)) {
         await createNotification(
           task.created_by,
           org_id,
@@ -248,7 +296,6 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
           currentUserId
         );
 
-        // Email notification to creator
         const creator = await User.findByPk(task.created_by);
         if (creator?.email) {
           sendTaskNotificationEmail('task_updated', {
@@ -265,78 +312,92 @@ export const updateTask = async (req: AuthRequest, res: Response): Promise<void>
       }
     }
 
-    // Notify if assigned to new user
-    if (assigned_to && assigned_to !== previousAssignee) {
-      // Notify new assignee (if not the one making the change)
-      if (assigned_to !== currentUserId) {
-        await createNotification(
-          assigned_to,
-          org_id,
-          'task_assigned',
-          'Task Assigned',
-          `You have been assigned to task: ${task.title}`,
-          task.id,
-          currentUserId
-        );
+    // Handle assignee changes
+    if (assigned_to !== undefined) {
+      // Find newly added assignees
+      const addedAssignees = newAssigneeIds.filter(id => !previousAssigneeIds.includes(id));
+      // Find removed assignees
+      const removedAssignees = previousAssigneeIds.filter(id => !newAssigneeIds.includes(id));
 
-        // Email notification to new assignee
-        const newAssignee = await User.findByPk(assigned_to);
-        if (newAssignee?.email) {
-          sendTaskNotificationEmail('task_assigned', {
-            recipientEmail: newAssignee.email,
-            recipientName: newAssignee.full_name,
-            taskTitle: task.title,
-            taskDescription: task.description || undefined,
-            taskStatus: task.status,
-            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-            assignerName: currentUser?.full_name,
-            organizationName: organization?.name
-          });
+      // Notify newly added assignees (except the one making the change)
+      for (const assigneeId of addedAssignees) {
+        if (assigneeId !== currentUserId) {
+          await createNotification(
+            assigneeId,
+            org_id,
+            'task_assigned',
+            'Task Assigned',
+            `You have been assigned to task: ${task.title}`,
+            task.id,
+            currentUserId
+          );
+
+          const assignee = await User.findByPk(assigneeId);
+          if (assignee?.email) {
+            sendTaskNotificationEmail('task_assigned', {
+              recipientEmail: assignee.email,
+              recipientName: assignee.full_name,
+              taskTitle: task.title,
+              taskDescription: task.description || undefined,
+              taskStatus: task.status,
+              taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+              assignerName: currentUser?.full_name,
+              organizationName: organization?.name
+            });
+          }
         }
       }
 
-      // Notify previous assignee (if exists and not the one making the change)
-      if (previousAssignee && previousAssignee !== currentUserId) {
-        const prevAssignee = await User.findByPk(previousAssignee);
-        await createNotification(
-          previousAssignee,
-          org_id,
-          'task_updated',
-          'Task Reassigned',
-          `Task "${task.title}" has been reassigned to someone else`,
-          task.id,
-          currentUserId
-        );
+      // Notify removed assignees (except the one making the change)
+      for (const assigneeId of removedAssignees) {
+        if (assigneeId !== currentUserId) {
+          await createNotification(
+            assigneeId,
+            org_id,
+            'task_updated',
+            'Task Reassigned',
+            `You have been unassigned from task: ${task.title}`,
+            task.id,
+            currentUserId
+          );
 
-        // Email notification to previous assignee
-        if (prevAssignee?.email) {
-          sendTaskNotificationEmail('task_updated', {
-            recipientEmail: prevAssignee.email,
-            recipientName: prevAssignee.full_name,
-            taskTitle: task.title,
-            taskDescription: task.description || undefined,
-            taskStatus: task.status,
-            taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
-            assignerName: currentUser?.full_name,
-            organizationName: organization?.name
-          });
+          const assignee = await User.findByPk(assigneeId);
+          if (assignee?.email) {
+            sendTaskNotificationEmail('task_updated', {
+              recipientEmail: assignee.email,
+              recipientName: assignee.full_name,
+              taskTitle: task.title,
+              taskDescription: task.description || undefined,
+              taskStatus: task.status,
+              taskDueDate: task.due_date ? new Date(task.due_date).toLocaleDateString() : undefined,
+              assignerName: currentUser?.full_name,
+              organizationName: organization?.name
+            });
+          }
         }
       }
 
-      // Notify creator (if different from actor, new assignee, and previous assignee)
-      if (task.created_by !== currentUserId && task.created_by !== assigned_to && task.created_by !== previousAssignee) {
-        const newAssigneeUser = await User.findByPk(assigned_to);
+      // Notify creator if assignees changed (if not actor and not already notified)
+      if ((addedAssignees.length > 0 || removedAssignees.length > 0) &&
+          task.created_by !== currentUserId &&
+          !addedAssignees.includes(task.created_by) &&
+          !removedAssignees.includes(task.created_by)) {
+        const newAssigneeNames = await User.findAll({
+          where: { id: { [Op.in]: newAssigneeIds } },
+          attributes: ['first_name', 'last_name']
+        });
+        const assigneeNamesStr = newAssigneeNames.map(u => `${u.first_name} ${u.last_name}`).join(', ') || 'no one';
+
         await createNotification(
           task.created_by,
           org_id,
           'task_updated',
           'Task Reassigned',
-          `Task "${task.title}" was reassigned to ${newAssigneeUser?.full_name || 'another user'}`,
+          `Task "${task.title}" was reassigned to ${assigneeNamesStr}`,
           task.id,
           currentUserId
         );
 
-        // Email notification to creator
         const creator = await User.findByPk(task.created_by);
         if (creator?.email) {
           sendTaskNotificationEmail('task_updated', {
@@ -365,7 +426,10 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
     const { id } = req.params;
     const org_id = req.user!.org_id!;
 
-    const task = await Task.findOne({ where: { id, org_id } });
+    const task = await Task.findOne({
+      where: { id, org_id },
+      include: [{ model: User, as: 'assignees', attributes: ['id', 'first_name', 'last_name', 'email'], through: { attributes: [] } }]
+    });
 
     if (!task) {
       res.status(404).json({ error: 'Task not found' });
@@ -375,24 +439,17 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
     const taskId = task.id;
     const taskTitle = task.title;
     const taskDescription = task.description;
-    const assignedTo = task.assigned_to;
     const currentUserId = req.user!.id;
+    const assignees = task.assignees || [];
 
-    // Get assignee and current user info before deleting
-    let assignee: User | null = null;
-    let organization: Organization | null = null;
-    let currentUser: User | null = null;
-    if (assignedTo) {
-      assignee = await User.findByPk(assignedTo);
-      organization = await Organization.findByPk(org_id);
-      currentUser = await User.findByPk(currentUserId);
-    }
+    // Get current user and organization info
+    const organization = await Organization.findByPk(org_id);
+    const currentUser = await User.findByPk(currentUserId);
 
-    // Create notification before deleting task (task_id will be null after deletion)
-    if (assignedTo) {
-      // Save notification to database (also sends Socket.IO notification)
+    // Notify all assignees before deleting
+    for (const assignee of assignees) {
       await createNotification(
-        assignedTo,
+        assignee.id,
         org_id,
         'task_deleted',
         'Task Deleted',
@@ -401,11 +458,10 @@ export const deleteTask = async (req: AuthRequest, res: Response): Promise<void>
         currentUserId
       );
 
-      // Email notification
-      if (assignee?.email) {
+      if (assignee.email) {
         sendTaskNotificationEmail('task_deleted', {
           recipientEmail: assignee.email,
-          recipientName: assignee.full_name,
+          recipientName: `${assignee.first_name} ${assignee.last_name}`,
           taskTitle: taskTitle,
           taskDescription: taskDescription || undefined,
           assignerName: currentUser?.full_name,
@@ -581,15 +637,23 @@ export const bulkCreateTasks = async (req: AuthRequest, res: Response): Promise<
           }
         }
 
-        // Resolve assignee by email
-        let assigned_to: number | null = null;
+        // Resolve assignees by email (support comma-separated emails)
+        const assigneeIds: number[] = [];
         if (row.assigned_to_email) {
-          const userId = emailToUserId.get(row.assigned_to_email.toLowerCase());
-          if (!userId) {
-            results.failed.push({ title: row.title, reason: `User not found: ${row.assigned_to_email}` });
-            continue;
+          const emails = row.assigned_to_email.split(';').map(e => e.trim().toLowerCase());
+          let allFound = true;
+          for (const email of emails) {
+            if (email) {
+              const userId = emailToUserId.get(email);
+              if (!userId) {
+                results.failed.push({ title: row.title, reason: `User not found: ${email}` });
+                allFound = false;
+                break;
+              }
+              assigneeIds.push(userId);
+            }
           }
-          assigned_to = userId;
+          if (!allFound) continue;
         }
 
         // Parse due date
@@ -607,14 +671,18 @@ export const bulkCreateTasks = async (req: AuthRequest, res: Response): Promise<
           description: row.description || null,
           status,
           due_date,
-          assigned_to,
           created_by,
           org_id
         });
 
+        // Set assignees
+        if (assigneeIds.length > 0) {
+          await task.setAssignees(assigneeIds);
+        }
+
         const taskWithAssociations = await Task.findByPk(task.id, {
           include: [
-            { model: User, as: 'assignee', attributes: ['id', 'first_name', 'last_name', 'email'] },
+            { model: User, as: 'assignees', attributes: ['id', 'first_name', 'last_name', 'email'], through: { attributes: [] } },
             { model: User, as: 'creator', attributes: ['id', 'first_name', 'last_name', 'email'] }
           ]
         });
@@ -622,12 +690,12 @@ export const bulkCreateTasks = async (req: AuthRequest, res: Response): Promise<
         // Emit real-time update
         io.to(`org_${org_id}`).emit('task_update', { action: 'created', task: taskWithAssociations });
 
-        // Notify assignee
-        if (assigned_to) {
-          const assignee = orgUsers.find(u => u.id === assigned_to);
+        // Notify all assignees
+        for (const assigneeId of assigneeIds) {
+          const assignee = orgUsers.find(u => u.id === assigneeId);
 
           await createNotification(
-            assigned_to,
+            assigneeId,
             org_id,
             'task_created',
             'New Task Assigned',

@@ -14,8 +14,8 @@ describe('TaskService', () => {
     description: 'Test description',
     status: 'Pending',
     due_date: null,
-    assigned_to: null,
     created_by: 1,
+    assignees: [],
     createdAt: '2024-01-01',
     updatedAt: '2024-01-01'
   };
