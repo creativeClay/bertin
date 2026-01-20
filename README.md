@@ -117,3 +117,63 @@ volumes:
 5. **Optional Bonus:** WebSocket real-time notifications, filtering, or task export.
 
 ---
+
+### **How to Run**
+
+#### Quick Start (Docker)
+
+```bash
+# Clone the repository
+git clone https://github.com/creativeClay/bertin.git
+cd bertin
+
+# Start all services
+docker compose up --build -d
+
+# View logs (optional)
+docker compose logs -f
+```
+
+The application will be available at:
+- **Frontend**: http://localhost:4200
+- **API**: http://localhost:3000
+- **Database**: localhost:5433
+
+#### Stop the Application
+
+```bash
+# Stop containers (preserves data)
+docker compose down
+
+# Stop and remove all data
+docker compose down -v
+```
+
+#### Development Setup (Without Docker)
+
+**Backend:**
+```bash
+cd api
+npm install
+cp .env.example .env  # Edit with your DB credentials
+npm run dev
+```
+
+**Frontend:**
+```bash
+cd app
+npm install
+npm start
+```
+
+#### Running Tests
+
+```bash
+# Backend tests
+cd api && npm test
+
+# Frontend tests
+cd app && npm test
+```
+
+---
